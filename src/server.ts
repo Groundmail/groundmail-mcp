@@ -5,7 +5,7 @@ import { Groundmail } from 'groundmail'
 import { callMcpTool, MCP_TOOLS, resolveApiKey } from './tools.js'
 
 /** Keep in step with package.json `version`. */
-export const MCP_SERVER_VERSION = '0.5.9'
+export const MCP_SERVER_VERSION = '0.5.11'
 
 /** Sent to clients on initialize; agents read it before calling tools. */
 export const MCP_SERVER_INSTRUCTIONS = [
@@ -27,7 +27,10 @@ export function createMcpServer(apiKey: string, baseUrl?: string) {
     tools: MCP_TOOLS.map((tool) => ({
       name: tool.name,
       description: tool.description,
+      title: tool.annotations.title,
       inputSchema: tool.inputSchema,
+      outputSchema: tool.outputSchema,
+      annotations: tool.annotations,
     })),
   }))
 

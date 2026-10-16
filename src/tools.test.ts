@@ -261,6 +261,24 @@ describe('callMcpTool', () => {
     expect(text).toContain('how to fix: https://docs.groundmail.dev/errors#insufficient_scope')
   })
 
+  it('returns object results as structuredContent beside the text', async () => {
+    const client = mockClient()
+    const result = await callMcpTool(client as never, 'send_email', {
+      from: 'noreply@mail.groundmail.dev',
+      to: 'owner@example.com',
+      subject: 'Hi',
+    })
+    expect(result.structuredContent).toEqual({ id: 'msg_1', status: 'sent' })
+    expect(JSON.parse(result.content[0]?.text ?? '')).toEqual(result.structuredContent)
+  })
+
+  it('does not attach structuredContent to errors', async () => {
+    const client = mockClient()
+    const result = await callMcpTool(client as never, 'get_email', {})
+    expect(result.isError).toBe(true)
+    expect(result.structuredContent).toBeUndefined()
+  })
+
   it('returns error text for unknown tools', async () => {
     const client = mockClient()
     const result = await callMcpTool(client as never, 'nope', {})

@@ -1,13 +1,41 @@
 import type { EmailWebhookEventType, Groundmail, WebhookEventType } from 'groundmail'
+import {
+  applyDnsOutput,
+  createWebhookOutput,
+  deliverabilityOutput,
+  domainItem,
+  domainWithRecordsOutput,
+  emailItem,
+  getEmailOutput,
+  okOutput,
+  pagedOutput,
+  sendEmailOutput,
+  suppressionItem,
+  suppressionOutput,
+  templateItem,
+  templateOutput,
+  testWebhookOutput,
+  verifyDomainOutput,
+  webhookItem,
+  type ObjectSchema,
+} from './output-schemas.js'
 
 export type McpToolResult = {
   content: Array<{ type: 'text'; text: string }>
+  /** The same result as a JSON object, matching the tool's `outputSchema`. */
+  structuredContent?: Record<string, unknown>
   isError?: boolean
 }
 
+/**
+ * Tool result with the JSON as text (older clients) and, for successful object
+ * results, as `structuredContent` (clients that read `outputSchema`).
+ */
 export function textResult(value: unknown, isError = false): McpToolResult {
+  const isObject = value !== null && typeof value === 'object' && !Array.isArray(value)
   return {
     content: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value, null, 2) }],
+    ...(!isError && isObject ? { structuredContent: value as Record<string, unknown> } : {}),
     ...(isError ? { isError: true } : {}),
   }
 }
@@ -310,7 +338,33 @@ const paginationProps = {
   cursor: { type: 'string', description: 'Opaque cursor for the next page' },
 }
 
-export const MCP_TOOLS = [
+/** MCP tool annotations (https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations). */
+type ToolAnnotations = {
+  title: string
+  readOnlyHint: boolean
+  destructiveHint: boolean
+  idempotentHint: boolean
+  openWorldHint: boolean
+}
+
+/** Reads Groundmail data only. */
+const readOnly = (title: string): ToolAnnotations => ({
+  title,
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+})
+
+export type McpToolDefinition = {
+  name: string
+  description: string
+  inputSchema: { type: 'object'; properties: Record<string, unknown>; required?: string[] }
+  outputSchema: ObjectSchema
+  annotations: ToolAnnotations
+}
+
+export const MCP_TOOLS: McpToolDefinition[] = [
   {
     name: 'send_email',
     description:
@@ -320,10 +374,10 @@ export const MCP_TOOLS = [
       properties: {
         from: { type: 'string', description: 'Sender address (must match a verified domain or sandbox sender)' },
         to: { type: 'string', description: 'Recipient email address' },
-        subject: { type: 'string', description: 'Optional when using a published template' },
-        html: { type: 'string' },
-        text: { type: 'string' },
-        reply_to: { type: 'string' },
+        subject: { type: 'string', description: 'Subject line. Optional when using a published template' },
+        html: { type: 'string', description: 'HTML body. Do not combine with template_id or template_alias' },
+        text: { type: 'string', description: 'Plain-text body. Do not combine with template_id or template_alias' },
+        reply_to: { type: 'string', description: 'Address that replies should go to' },
         template_id: { type: 'string', description: 'Published template UUID' },
         template_alias: { type: 'string', description: 'Published template alias' },
         variables: {
@@ -334,6 +388,14 @@ export const MCP_TOOLS = [
       },
       required: ['from', 'to'],
     },
+    outputSchema: sendEmailOutput,
+    annotations: {
+      title: 'Send email',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
   },
   {
     name: 'list_emails',
@@ -342,6 +404,8 @@ export const MCP_TOOLS = [
       type: 'object',
       properties: { ...paginationProps },
     },
+    outputSchema: pagedOutput('emails', emailItem, 'Emails on this page, newest first'),
+    annotations: readOnly('List emails'),
   },
   {
     name: 'get_email',
@@ -353,6 +417,8 @@ export const MCP_TOOLS = [
       },
       required: ['id'],
     },
+    outputSchema: getEmailOutput,
+    annotations: readOnly('Get email'),
   },
   {
     name: 'list_domains',
@@ -361,6 +427,8 @@ export const MCP_TOOLS = [
       type: 'object',
       properties: { ...paginationProps },
     },
+    outputSchema: pagedOutput('domains', domainItem, 'Sending domains on this page'),
+    annotations: readOnly('List domains'),
   },
   {
     name: 'create_domain',
@@ -373,6 +441,14 @@ export const MCP_TOOLS = [
       },
       required: ['name'],
     },
+    outputSchema: domainWithRecordsOutput,
+    annotations: {
+      title: 'Create domain',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
   },
   {
     name: 'apply_domain_dns',
@@ -381,14 +457,28 @@ export const MCP_TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        domain: { type: 'string' },
-        provider: { type: 'string', enum: ['cloudflare', 'godaddy', 'vercel'] },
+        domain: { type: 'string', description: 'Domain name or id of a domain already added to this account (example.com)' },
+        provider: {
+          type: 'string',
+          enum: ['cloudflare', 'godaddy', 'vercel'],
+          description: 'DNS provider that hosts the domain',
+        },
         credentials: {
           type: 'object',
           description: 'Optional inline registrar credentials (GoDaddy api key/secret)',
         },
       },
       required: ['domain', 'provider'],
+    },
+    outputSchema: applyDnsOutput,
+    // Writes to the user's DNS provider and can update records that already exist at the same host.
+    // Re-running it leaves matching records unchanged.
+    annotations: {
+      title: 'Apply domain DNS records',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: true,
     },
   },
   {
@@ -397,9 +487,18 @@ export const MCP_TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        domain: { type: 'string' },
+        domain: { type: 'string', description: 'Domain name or id to check (example.com)' },
       },
       required: ['domain'],
+    },
+    outputSchema: verifyDomainOutput,
+    // Looks up public DNS and records the result on the domain.
+    annotations: {
+      title: 'Verify domain',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
     },
   },
   {
@@ -409,6 +508,8 @@ export const MCP_TOOLS = [
       type: 'object',
       properties: { ...paginationProps },
     },
+    outputSchema: pagedOutput('webhooks', webhookItem, 'Webhook endpoints on this page'),
+    annotations: readOnly('List webhooks'),
   },
   {
     name: 'create_webhook',
@@ -425,6 +526,14 @@ export const MCP_TOOLS = [
       },
       required: ['url'],
     },
+    outputSchema: createWebhookOutput,
+    annotations: {
+      title: 'Create webhook',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
   },
   {
     name: 'delete_webhook',
@@ -435,6 +544,14 @@ export const MCP_TOOLS = [
         id: { type: 'string', description: 'Webhook id (wh_…)' },
       },
       required: ['id'],
+    },
+    outputSchema: okOutput,
+    annotations: {
+      title: 'Delete webhook',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
     },
   },
   {
@@ -447,6 +564,8 @@ export const MCP_TOOLS = [
         email: { type: 'string', description: 'Optional filter by email' },
       },
     },
+    outputSchema: pagedOutput('data', suppressionItem, 'Suppressed addresses on this page'),
+    annotations: readOnly('List suppressions'),
   },
   {
     name: 'add_suppression',
@@ -454,10 +573,19 @@ export const MCP_TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        email: { type: 'string' },
-        reason: { type: 'string' },
+        email: { type: 'string', description: 'Email address to stop sending to' },
+        reason: { type: 'string', description: 'Optional note on why the address is suppressed' },
       },
       required: ['email'],
+    },
+    outputSchema: suppressionOutput,
+    // Adding an address that is already suppressed updates that entry instead of creating a second one.
+    annotations: {
+      title: 'Add suppression',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
     },
   },
   {
@@ -470,6 +598,14 @@ export const MCP_TOOLS = [
         email: { type: 'string', description: 'Email address (alternative to id)' },
       },
     },
+    outputSchema: okOutput,
+    annotations: {
+      title: 'Remove suppression',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
   },
   {
     name: 'list_templates',
@@ -478,9 +614,11 @@ export const MCP_TOOLS = [
       type: 'object',
       properties: {
         ...paginationProps,
-        status: { type: 'string', enum: ['draft', 'published'] },
+        status: { type: 'string', enum: ['draft', 'published'], description: 'Optional filter by template status' },
       },
     },
+    outputSchema: pagedOutput('data', templateItem, 'Templates on this page'),
+    annotations: readOnly('List templates'),
   },
   {
     name: 'get_template',
@@ -492,6 +630,8 @@ export const MCP_TOOLS = [
         alias: { type: 'string', description: 'Published alias (alternative to id)' },
       },
     },
+    outputSchema: templateOutput,
+    annotations: readOnly('Get template'),
   },
   {
     name: 'create_template',
@@ -499,14 +639,22 @@ export const MCP_TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        name: { type: 'string' },
-        subject: { type: 'string' },
-        format: { type: 'string', enum: ['html', 'blocks'] },
-        html: { type: 'string' },
-        text: { type: 'string' },
-        alias: { type: 'string' },
+        name: { type: 'string', description: 'Template name' },
+        subject: { type: 'string', description: 'Subject line, may contain {{variables}}' },
+        format: { type: 'string', enum: ['html', 'blocks'], description: 'Template format (html or blocks)' },
+        html: { type: 'string', description: 'HTML body' },
+        text: { type: 'string', description: 'Plain-text body' },
+        alias: { type: 'string', description: 'Optional short alias to reference the template by instead of its id' },
       },
       required: ['name', 'subject'],
+    },
+    outputSchema: templateOutput,
+    annotations: {
+      title: 'Create template',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
     },
   },
   {
@@ -515,9 +663,18 @@ export const MCP_TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        id: { type: 'string' },
-        alias: { type: 'string' },
+        id: { type: 'string', description: 'Template id (tpl_…)' },
+        alias: { type: 'string', description: 'Template alias (alternative to id)' },
       },
+    },
+    outputSchema: templateOutput,
+    // Each publish snapshots a new version; earlier versions are kept.
+    annotations: {
+      title: 'Publish template',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
     },
   },
   {
@@ -540,6 +697,14 @@ export const MCP_TOOLS = [
       },
       required: ['event'],
     },
+    outputSchema: testWebhookOutput,
+    annotations: {
+      title: 'Send test webhook event',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
   },
   {
     name: 'get_deliverability',
@@ -548,11 +713,13 @@ export const MCP_TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        window: { type: 'string', enum: ['7d', '30d'] },
+        window: { type: 'string', enum: ['7d', '30d'], description: 'Time window to summarize (default 30d)' },
       },
     },
+    outputSchema: deliverabilityOutput,
+    annotations: readOnly('Get deliverability metrics'),
   },
-] as const
+]
 
 export function resolveApiKey(): string {
   const key = process.env.GROUNDMAIL_API_KEY?.trim()
