@@ -18,6 +18,8 @@ const DOCS_URL = 'https://docs.groundmail.dev/ai/mcp'
 /**
  * Scopes a client may ask for when it connects (the authorization server's
  * catalog). With none, the sign-in asks for `full`; the person can narrow it.
+ * `openid` and `email` only identify the person (the userinfo endpoint): they
+ * grant no tool access.
  */
 export const MCP_SCOPES_SUPPORTED = [
   'full',
@@ -29,6 +31,8 @@ export const MCP_SCOPES_SUPPORTED = [
   'templates:write',
   'suppressions:write',
   'account:read',
+  'openid',
+  'email',
 ] as const
 
 function trimOrigin(origin: string): string {
