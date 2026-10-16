@@ -1,0 +1,46 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.Groundmail/groundmail",
+  "title": "Groundmail",
+  "description": "Send transactional email and manage domains, templates, webhooks and suppressions with Groundmail.",
+  "websiteUrl": "https://docs.groundmail.dev/ai/mcp",
+  "repository": {
+    "url": "https://github.com/Groundmail/groundmail-mcp",
+    "source": "github"
+  },
+  "version": "0.5.10",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "groundmail-mcp",
+      "version": "0.5.10",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "GROUNDMAIL_API_KEY",
+          "description": "Groundmail API key (starts with gm_). Create one at https://app.groundmail.dev/api-keys",
+          "isRequired": true,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "GROUNDMAIL_API_URL",
+          "description": "Optional API base URL override (default https://api.groundmail.dev)",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        }
+      ]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.groundmail.dev/mcp"
+    }
+  ]
+}

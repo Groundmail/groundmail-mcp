@@ -1,0 +1,30 @@
+# Smithery configuration for groundmail-mcp
+# Local stdio listing on https://smithery.ai. The hosted server (https://mcp.groundmail.dev/mcp)
+# is listed separately by URL; Smithery handles its OAuth.
+
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    required: [apiKey]
+    properties:
+      apiKey:
+        type: string
+        title: Groundmail API Key
+        description: API key starting with gm_
+      apiUrl:
+        type: string
+        title: API Base URL
+        description: Optional override (default https://api.groundmail.dev)
+  commandFunction: |-
+    (config) => ({
+      command: 'npx',
+      args: ['-y', 'groundmail-mcp'],
+      env: {
+        GROUNDMAIL_API_KEY: config.apiKey,
+        ...(config.apiUrl ? { GROUNDMAIL_API_URL: config.apiUrl } : {}),
+      },
+    })
+
+exampleConfig:
+  apiKey: gm_your_key_here

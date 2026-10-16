@@ -1,0 +1,55 @@
+{
+  "name": "groundmail-mcp",
+  "version": "0.5.10",
+  "mcpName": "io.github.Groundmail/groundmail",
+  "description": "Groundmail MCP server: send transactional email, manage domains, templates, webhooks and suppressions from Claude, Cursor, ChatGPT and other MCP clients",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "groundmail-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "smithery.yaml",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Groundmail/groundmail-mcp.git"
+  },
+  "homepage": "https://docs.groundmail.dev/ai/mcp",
+  "keywords": [
+    "mcp",
+    "email",
+    "transactional",
+    "groundmail",
+    "cursor",
+    "claude"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "groundmail": "0.14.4"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "^5",
+    "vitest": "^3.2.4",
+    "@types/node": "^20"
+  },
+  "bugs": {
+    "url": "https://github.com/Groundmail/groundmail-mcp/issues"
+  }
+}
