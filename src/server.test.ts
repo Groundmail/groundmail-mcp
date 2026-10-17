@@ -101,6 +101,27 @@ const bucket = {
 
 /** What the API returns for each tool's request, as the routes build it. */
 const API_RESPONSES: Record<string, unknown> = {
+  import_from_provider: {
+    migration: {
+      id: 'mig_1',
+      provider: 'sendgrid',
+      dry_run: true,
+      status: 'completed',
+      started_at: NOW,
+      resources: ['templates', 'suppressions'],
+      has_more: false,
+      next_cursor: null,
+      retry_after_seconds: null,
+      templates: { totals: { found: 1, imported: 1 }, items: [] },
+      suppressions: { totals: { found: 3 }, skipped_reasons: {}, estimated: true },
+      errors: [],
+      notes: [],
+      attention: [],
+      template_map: [{ source_id: 'd-1', alias: 'welcome' }],
+      code_changes: [{ stack: 'node', label: 'Node.js', diff: '-a\n+b' }],
+      agent_prompt: 'Switch to Groundmail.',
+    },
+  },
   send_email: { id: 'msg_1', status: 'queued' },
   list_emails: { emails: [email], ...page },
   get_email: { email },
@@ -169,11 +190,13 @@ const TOOL_ARGS: Record<string, Record<string, unknown>> = {
   create_template: { name: 'Welcome', subject: 'Hi' },
   publish_template: { alias: 'welcome' },
   send_test_webhook_event: { event: 'email.bounced' },
+  import_from_provider: { provider: 'sendgrid', api_key: 'SG.test_key_value', dry_run: true },
 }
 
 /** Which tool a request belongs to, by method and path. */
 function toolForRequest(method: string, path: string, body: string | undefined): string {
   const action = body ? (JSON.parse(body) as { action?: string }).action : undefined
+  if (path.startsWith('/migrations')) return 'import_from_provider'
   if (path.startsWith('/emails/test')) return 'send_test_webhook_event'
   if (path.startsWith('/emails/')) return 'get_email'
   if (path.startsWith('/emails')) return method === 'POST' ? 'send_email' : 'list_emails'
@@ -233,7 +256,7 @@ describe('tool definitions', () => {
     const { client } = await connect()
     const { tools } = await client.listTools()
     expect(tools.map((tool) => tool.name).sort()).toEqual(MCP_TOOLS.map((tool) => tool.name).sort())
-    expect(tools).toHaveLength(19)
+    expect(tools).toHaveLength(20)
   })
 
   it('gives every tool a description, a title and complete annotations', async () => {

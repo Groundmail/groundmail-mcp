@@ -299,3 +299,39 @@ export const deliverabilityOutput: ObjectSchema = object(
   },
   ['window', 'summary'],
 )
+
+const anyObject = (description: string): Schema => ({ type: 'object', description })
+
+/** `import_from_provider`: the combined report of every request of one import. */
+export const migrationOutput: ObjectSchema = object(
+  {
+    migration: described(
+      object(
+        {
+          id: string('Import id'),
+          provider: string('sendgrid, postmark or mailgun'),
+          dry_run: boolean('True for a preview: nothing was written'),
+          status: string('completed, partial (some items failed, each listed), failed, or in_progress'),
+          started_at: string('When the import started (ISO 8601)'),
+          resources: stringArray('What was imported: domains, webhooks, templates, suppressions'),
+          has_more: boolean('True if the import stopped early; call the tool again with `cursor` to continue'),
+          next_cursor: nullableString('Pass as `cursor` to continue an import that stopped early'),
+          retry_after_seconds: { type: ['number', 'null'], description: 'Wait this long before continuing' },
+          domains: anyObject('Totals and one item per domain, with the DNS records to publish'),
+          webhooks: anyObject('Totals and one item per webhook (created disabled), with mapped events and the signing secret'),
+          templates: anyObject('Totals and one item per template, with its alias and conversion notes'),
+          suppressions: anyObject('Totals by type (bounce, complaint, unsubscribe, manual) and skip reasons'),
+          errors: arrayOf(anyObject('A resource that could not be read'), 'Resources that could not be read at all'),
+          notes: stringArray('What was left out on purpose, and why'),
+          attention: stringArray('What the user still needs to do'),
+          template_map: arrayOf(anyObject('Provider template id and Groundmail alias'), 'Provider template id → Groundmail alias'),
+          code_changes: { type: ['array', 'null'], items: anyObject('One stack'), description: 'Send call before and after, for Node.js, Python and cURL' },
+          agent_prompt: nullableString('Prompt for a coding agent to make the code change'),
+        },
+        ['id', 'provider', 'dry_run', 'status', 'has_more'],
+      ),
+      'The import report',
+    ),
+  },
+  ['migration'],
+)

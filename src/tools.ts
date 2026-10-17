@@ -1,4 +1,4 @@
-import type { EmailWebhookEventType, Groundmail, WebhookEventType } from 'groundmail'
+import type { CreateMigrationParams, EmailWebhookEventType, Groundmail, MigrationResource, WebhookEventType } from 'groundmail'
 import {
   applyDnsOutput,
   createWebhookOutput,
@@ -7,6 +7,7 @@ import {
   domainWithRecordsOutput,
   emailItem,
   getEmailOutput,
+  migrationOutput,
   okOutput,
   pagedOutput,
   sendEmailOutput,
@@ -282,6 +283,27 @@ export async function callMcpTool(
         const window = args.window === '7d' ? '7d' : '30d'
         const result = await client.emails.insights(window)
         return textResult(result)
+      }
+      case 'import_from_provider': {
+        const provider = optString(args, 'provider')
+        if (provider !== 'sendgrid' && provider !== 'postmark' && provider !== 'mailgun') {
+          return textResult('Missing or unknown provider: use sendgrid, postmark or mailgun', true)
+        }
+        const apiKey = optString(args, 'api_key')
+        if (!apiKey) return textResult('Missing required argument: api_key (the key of the account to import from)', true)
+        const region = optString(args, 'region')
+        const resources = optStringArray(args, 'resources')
+        const cursor = optString(args, 'cursor')
+        const params: CreateMigrationParams = {
+          provider,
+          api_key: apiKey,
+          ...(optString(args, 'account_api_key') ? { account_api_key: optString(args, 'account_api_key') } : {}),
+          ...(region === 'us' || region === 'eu' ? { region } : {}),
+          ...(resources?.length ? { resources: resources as MigrationResource[] } : {}),
+          ...(optBoolean(args, 'dry_run') ? { dry_run: true } : {}),
+          ...(cursor ? { cursor } : {}),
+        }
+        return textResult({ migration: await client.migrations.run(params) })
       }
       default:
         return textResult(`Unknown tool: ${name}`, true)
@@ -718,6 +740,40 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
     outputSchema: deliverabilityOutput,
     annotations: readOnly('Get deliverability metrics'),
+  },
+  {
+    name: 'import_from_provider',
+    description:
+      'Beta. Import templates, suppressions (bounces, complaints, unsubscribes), sending domains and webhooks from SendGrid, Postmark or Mailgun into Groundmail. Ask the user for their provider API key; it is used for this import only and never stored, so do not write it to a file. Run with dry_run first to show the user what will be imported. Imported webhooks start disabled; templates that use logic Groundmail does not convert are imported as drafts. The result includes what needs attention, the code change, and a prompt for making it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        provider: { type: 'string', enum: ['sendgrid', 'postmark', 'mailgun'], description: 'Provider to import from' },
+        api_key: {
+          type: 'string',
+          description: 'SendGrid API key, Postmark server API token, or Mailgun private API key (read access is enough)',
+        },
+        account_api_key: { type: 'string', description: 'Postmark only: account API token, needed to import sending domains' },
+        region: { type: 'string', enum: ['us', 'eu'], description: 'SendGrid and Mailgun: eu for EU-region accounts (default us)' },
+        resources: {
+          type: 'array',
+          items: { type: 'string', enum: ['domains', 'webhooks', 'templates', 'suppressions'] },
+          description: 'What to import (default: all four)',
+        },
+        dry_run: { type: 'boolean', description: 'Preview without writing anything' },
+        cursor: { type: 'string', description: 'next_cursor from an import that stopped early, to continue it' },
+      },
+      required: ['provider', 'api_key'],
+    },
+    outputSchema: migrationOutput,
+    // Re-running skips what already exists, so it is safe to repeat.
+    annotations: {
+      title: 'Import from another provider',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
   },
 ]
 
