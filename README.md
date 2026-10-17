@@ -143,7 +143,7 @@ Want your coding agent to know Groundmail too? Install the [agent skills](https:
 | Use | Package |
 |-----|---------|
 | Node.js / TypeScript | [`groundmail`](https://www.npmjs.com/package/groundmail) on npm |
-| Python, Go, Ruby | [Groundmail/groundmail-sdks](https://github.com/Groundmail/groundmail-sdks) |
+| Python (Django), Go, Ruby (Rails Action Mailer) | [Groundmail/groundmail-sdks](https://github.com/Groundmail/groundmail-sdks) |
 | PHP | [Groundmail/groundmail-php](https://github.com/Groundmail/groundmail-php) |
 | Laravel | [Groundmail/groundmail-laravel](https://github.com/Groundmail/groundmail-laravel) |
 | Symfony Mailer | [Groundmail/groundmail-symfony-mailer](https://github.com/Groundmail/groundmail-symfony-mailer) |
@@ -152,9 +152,7 @@ Want your coding agent to know Groundmail too? Install the [agent skills](https:
 | Strapi | [Groundmail/strapi-provider-email-groundmail](https://github.com/Groundmail/strapi-provider-email-groundmail) |
 | Medusa | [Groundmail/medusa-notification-groundmail](https://github.com/Groundmail/medusa-notification-groundmail) |
 | AdonisJS | [Groundmail/adonisjs-groundmail](https://github.com/Groundmail/adonisjs-groundmail) |
-| Rails (Action Mailer) | [Groundmail/groundmail-rails](https://github.com/Groundmail/groundmail-rails) |
 | Phoenix (Swoosh) | [Groundmail/swoosh_groundmail](https://github.com/Groundmail/swoosh_groundmail) |
-| PocketBase | [Groundmail/groundmail-pocketbase](https://github.com/Groundmail/groundmail-pocketbase) |
 | CLI | [`groundmail-cli`](https://www.npmjs.com/package/groundmail-cli) on npm |
 | MCP server (Claude, ChatGPT, Cursor) | [Groundmail/groundmail-mcp](https://github.com/Groundmail/groundmail-mcp) |
 | Agent skills and Claude Code plugin | [Groundmail/groundmail-skills](https://github.com/Groundmail/groundmail-skills) |
