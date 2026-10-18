@@ -279,6 +279,100 @@ describe('callMcpTool', () => {
     expect(result.structuredContent).toBeUndefined()
   })
 
+  it('tenant tools call the SDK', async () => {
+    const tenant = { id: 'ten_1', external_id: 'acme', status: 'active' }
+    const tenants = {
+      list: vi.fn().mockResolvedValue({ data: [tenant], has_more: false, next_cursor: null }),
+      create: vi.fn().mockResolvedValue({ tenant }),
+      get: vi.fn().mockResolvedValue({ tenant }),
+      update: vi.fn().mockResolvedValue({ tenant }),
+      pause: vi.fn().mockResolvedValue({ tenant: { ...tenant, status: 'paused' } }),
+      resume: vi.fn().mockResolvedValue({ tenant }),
+      stats: vi.fn().mockResolvedValue({ tenant: 'acme', stats: { days: 30 } }),
+    }
+    const client = { ...mockClient(), tenants }
+
+    await callMcpTool(client as never, 'list_tenants', { status: 'paused', limit: 5 })
+    expect(tenants.list).toHaveBeenCalledWith({ limit: 5, cursor: undefined, status: 'paused' })
+
+    await callMcpTool(client as never, 'create_tenant', {
+      external_id: 'acme',
+      name: 'Acme',
+      daily_limit: 500,
+      stream_policy: 'transactional_only',
+      metadata: { plan: 'pro' },
+    })
+    expect(tenants.create).toHaveBeenCalledWith({
+      external_id: 'acme',
+      name: 'Acme',
+      daily_limit: 500,
+      stream_policy: 'transactional_only',
+      metadata: { plan: 'pro' },
+    })
+
+    await callMcpTool(client as never, 'get_tenant', { tenant: 'acme' })
+    expect(tenants.get).toHaveBeenCalledWith('acme')
+
+    await callMcpTool(client as never, 'update_tenant', { tenant: 'acme', daily_limit: null })
+    expect(tenants.update).toHaveBeenCalledWith('acme', { daily_limit: null })
+
+    await callMcpTool(client as never, 'pause_tenant', { tenant: 'acme', reason: 'unpaid' })
+    expect(tenants.pause).toHaveBeenCalledWith('acme', 'unpaid')
+
+    await callMcpTool(client as never, 'resume_tenant', { tenant: 'acme' })
+    expect(tenants.resume).toHaveBeenCalledWith('acme')
+
+    await callMcpTool(client as never, 'get_tenant_stats', { tenant: 'acme', days: 30 })
+    expect(tenants.stats).toHaveBeenCalledWith('acme', { days: 30 })
+  })
+
+  it('tenant tools validate arguments before calling the API', async () => {
+    const tenants = { create: vi.fn(), update: vi.fn(), get: vi.fn() }
+    const client = { ...mockClient(), tenants }
+    expect((await callMcpTool(client as never, 'create_tenant', {})).isError).toBe(true)
+    expect((await callMcpTool(client as never, 'create_tenant', { external_id: 'a', stream_policy: 'x' })).isError).toBe(true)
+    expect((await callMcpTool(client as never, 'update_tenant', { tenant: 'a' })).isError).toBe(true)
+    expect((await callMcpTool(client as never, 'update_tenant', { tenant: 'a', daily_limit: -1 })).isError).toBe(true)
+    expect((await callMcpTool(client as never, 'get_tenant', {})).isError).toBe(true)
+    expect(tenants.create).not.toHaveBeenCalled()
+    expect(tenants.update).not.toHaveBeenCalled()
+    expect(tenants.get).not.toHaveBeenCalled()
+  })
+
+  it('passes tenant to sends, lists, domains, suppressions, webhooks and test events', async () => {
+    const client = mockClient()
+    await callMcpTool(client as never, 'send_email', {
+      from: 'a@acme.com',
+      to: 'b@example.com',
+      subject: 'Hi',
+      text: 'x',
+      tenant: 'acme',
+    })
+    expect(client.emails.send.mock.calls[0]?.[0]).toMatchObject({ tenant: 'acme' })
+    await callMcpTool(client as never, 'list_emails', { tenant: 'acme' })
+    expect(client.emails.list.mock.calls[0]?.[0]).toMatchObject({ tenant: 'acme' })
+    await callMcpTool(client as never, 'list_domains', { tenant: 'acme' })
+    expect(client.domains.list.mock.calls[0]?.[0]).toMatchObject({ tenant: 'acme' })
+    await callMcpTool(client as never, 'create_domain', { name: 'mail.acme.com', tenant: 'acme' })
+    expect(client.domains.create).toHaveBeenCalledWith({ name: 'mail.acme.com', tenant: 'acme' })
+    await callMcpTool(client as never, 'list_suppressions', { tenant: 'acme' })
+    expect(client.suppressions.list.mock.calls[0]?.[0]).toMatchObject({ tenant: 'acme' })
+    await callMcpTool(client as never, 'add_suppression', { email: 'x@y.com', tenant: 'acme' })
+    expect(client.suppressions.create.mock.calls[0]?.[0]).toMatchObject({ tenant: 'acme' })
+    await callMcpTool(client as never, 'remove_suppression', { email: 'x@y.com', tenant: 'acme' })
+    expect(client.suppressions.remove).toHaveBeenCalledWith('x@y.com', { tenant: 'acme' })
+    await callMcpTool(client as never, 'create_webhook', { url: 'https://x.test/h', tenants: ['acme'] })
+    expect(client.webhooks.create).toHaveBeenCalledWith({ url: 'https://x.test/h', tenants: ['acme'] })
+    await callMcpTool(client as never, 'send_test_webhook_event', { event: 'email.delivered', tenant: 'acme' })
+    expect(client.emails.testWebhook.mock.calls[0]?.[0]).toMatchObject({ tenant: 'acme' })
+  })
+
+  it('send_email leaves tenant out when not given', async () => {
+    const client = mockClient()
+    await callMcpTool(client as never, 'send_email', { from: 'a@acme.com', to: 'b@example.com', subject: 'Hi', text: 'x' })
+    expect(client.emails.send.mock.calls[0]?.[0]).not.toHaveProperty('tenant')
+  })
+
   it('returns error text for unknown tools', async () => {
     const client = mockClient()
     const result = await callMcpTool(client as never, 'nope', {})

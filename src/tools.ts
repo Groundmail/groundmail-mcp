@@ -1,8 +1,17 @@
-import type { CreateMigrationParams, EmailWebhookEventType, Groundmail, MigrationResource, WebhookEventType } from 'groundmail'
+import type {
+  CreateMigrationParams,
+  EmailWebhookEventType,
+  Groundmail,
+  MigrationResource,
+  TenantStreamPolicy,
+  UpdateTenantParams,
+  WebhookEventType,
+} from 'groundmail'
 import {
   applyDnsOutput,
   createWebhookOutput,
   deliverabilityOutput,
+  dmarcOutput,
   domainItem,
   domainWithRecordsOutput,
   emailItem,
@@ -15,7 +24,11 @@ import {
   suppressionOutput,
   templateItem,
   templateOutput,
+  tenantItem,
+  tenantOutput,
+  tenantStatsOutput,
   testWebhookOutput,
+  validateEmailOutput,
   verifyDomainOutput,
   webhookItem,
   type ObjectSchema,
@@ -69,6 +82,36 @@ function optStringArray(args: Record<string, unknown>, key: string): string[] | 
   return undefined
 }
 
+/** Tenant settings shared by create_tenant and update_tenant; an error string when one is invalid. */
+function tenantSettings(args: Record<string, unknown>): UpdateTenantParams | string {
+  const out: UpdateTenantParams = {}
+  if (args.name !== undefined) out.name = args.name == null ? null : String(args.name)
+  if (args.default_from_domain !== undefined) {
+    out.default_from_domain = args.default_from_domain == null ? null : String(args.default_from_domain)
+  }
+  if (args.stream_policy !== undefined) {
+    if (args.stream_policy !== 'all' && args.stream_policy !== 'transactional_only') {
+      return 'stream_policy must be all or transactional_only'
+    }
+    out.stream_policy = args.stream_policy as TenantStreamPolicy
+  }
+  if (args.daily_limit !== undefined) {
+    if (args.daily_limit === null) out.daily_limit = null
+    else {
+      const n = Number(args.daily_limit)
+      if (!Number.isInteger(n) || n < 0) return 'daily_limit must be a whole number, or null for no limit'
+      out.daily_limit = n
+    }
+  }
+  if (args.metadata !== undefined) {
+    if (args.metadata !== null && (typeof args.metadata !== 'object' || Array.isArray(args.metadata))) {
+      return 'metadata must be an object, or null'
+    }
+    out.metadata = args.metadata as Record<string, unknown> | null
+  }
+  return out
+}
+
 const EMAIL_WEBHOOK_EVENTS = new Set<string>([
   'email.received',
   'email.sent',
@@ -111,6 +154,7 @@ export async function callMcpTool(
           html: optString(args, 'html'),
           text: optString(args, 'text'),
           reply_to: optString(args, 'reply_to'),
+          ...(optString(args, 'tenant') ? { tenant: optString(args, 'tenant') } : {}),
           ...(templateId
             ? { template: { id: templateId, ...(variables ? { variables } : {}) } }
             : {}),
@@ -121,6 +165,8 @@ export async function callMcpTool(
         const result = await client.emails.list({
           limit: optNumber(args, 'limit'),
           cursor: optString(args, 'cursor'),
+          ...(typeof args.test === 'boolean' ? { test: args.test } : {}),
+          ...(optString(args, 'tenant') ? { tenant: optString(args, 'tenant') } : {}),
         })
         return textResult(result)
       }
@@ -162,6 +208,7 @@ export async function callMcpTool(
         const result = await client.domains.list({
           limit: optNumber(args, 'limit'),
           cursor: optString(args, 'cursor'),
+          ...(optString(args, 'tenant') ? { tenant: optString(args, 'tenant') } : {}),
         })
         return textResult(result)
       }
@@ -173,6 +220,7 @@ export async function callMcpTool(
           await client.domains.create({
             name: domainName,
             ...(inbound !== undefined ? { inbound_enabled: inbound } : {}),
+            ...(optString(args, 'tenant') ? { tenant: optString(args, 'tenant') } : {}),
           }),
         )
       }
@@ -188,10 +236,12 @@ export async function callMcpTool(
         const url = optString(args, 'url')
         if (!url) return textResult('Missing required argument: url', true)
         const events = optStringArray(args, 'events') as WebhookEventType[] | undefined
+        const tenants = optStringArray(args, 'tenants')
         return textResult(
           await client.webhooks.create({
             url,
             ...(events ? { events } : {}),
+            ...(tenants?.length ? { tenants } : {}),
           }),
         )
       }
@@ -206,8 +256,14 @@ export async function callMcpTool(
             limit: optNumber(args, 'limit'),
             cursor: optString(args, 'cursor'),
             email: optString(args, 'email'),
+            ...(optString(args, 'tenant') ? { tenant: optString(args, 'tenant') } : {}),
           }),
         )
+      }
+      case 'validate_email': {
+        const email = optString(args, 'email')
+        if (!email) return textResult('Missing required argument: email', true)
+        return textResult(await client.validate(email))
       }
       case 'add_suppression': {
         const email = optString(args, 'email')
@@ -216,6 +272,7 @@ export async function callMcpTool(
           await client.suppressions.create({
             email,
             reason: optString(args, 'reason'),
+            ...(optString(args, 'tenant') ? { tenant: optString(args, 'tenant') } : {}),
           }),
         )
       }
@@ -224,7 +281,8 @@ export async function callMcpTool(
         if (!idOrEmail) {
           return textResult('Missing required argument: id or email', true)
         }
-        return textResult(await client.suppressions.remove(idOrEmail))
+        const tenant = optString(args, 'tenant')
+        return textResult(tenant ? await client.suppressions.remove(idOrEmail, { tenant }) : await client.suppressions.remove(idOrEmail))
       }
       case 'list_templates': {
         const status = optString(args, 'status')
@@ -276,8 +334,77 @@ export async function callMcpTool(
             event: event as EmailWebhookEventType,
             email_id: optString(args, 'email_id'),
             deliver: optBoolean(args, 'deliver'),
+            ...(optString(args, 'tenant') ? { tenant: optString(args, 'tenant') } : {}),
           }),
         )
+      }
+      case 'list_tenants': {
+        const status = optString(args, 'status')
+        return textResult(
+          await client.tenants.list({
+            limit: optNumber(args, 'limit'),
+            cursor: optString(args, 'cursor'),
+            ...(status === 'active' || status === 'paused' ? { status } : {}),
+          }),
+        )
+      }
+      case 'create_tenant': {
+        const externalId = optString(args, 'external_id')
+        if (!externalId) return textResult('Missing required argument: external_id', true)
+        const settings = tenantSettings(args)
+        if (typeof settings === 'string') return textResult(settings, true)
+        const { name, ...rest } = settings
+        return textResult(
+          await client.tenants.create({ external_id: externalId, ...(name ? { name } : {}), ...rest }),
+        )
+      }
+      case 'get_tenant': {
+        const tenant = optString(args, 'tenant')
+        if (!tenant) return textResult('Missing required argument: tenant', true)
+        return textResult(await client.tenants.get(tenant))
+      }
+      case 'update_tenant': {
+        const tenant = optString(args, 'tenant')
+        if (!tenant) return textResult('Missing required argument: tenant', true)
+        const settings = tenantSettings(args)
+        if (typeof settings === 'string') return textResult(settings, true)
+        if (!Object.keys(settings).length) {
+          return textResult(
+            'Nothing to update: pass name, default_from_domain, stream_policy, daily_limit or metadata (use pause_tenant / resume_tenant to pause or resume)',
+            true,
+          )
+        }
+        return textResult(await client.tenants.update(tenant, settings))
+      }
+      case 'pause_tenant': {
+        const tenant = optString(args, 'tenant')
+        if (!tenant) return textResult('Missing required argument: tenant', true)
+        return textResult(await client.tenants.pause(tenant, optString(args, 'reason')))
+      }
+      case 'resume_tenant': {
+        const tenant = optString(args, 'tenant')
+        if (!tenant) return textResult('Missing required argument: tenant', true)
+        return textResult(await client.tenants.resume(tenant))
+      }
+      case 'get_tenant_stats': {
+        const tenant = optString(args, 'tenant')
+        if (!tenant) return textResult('Missing required argument: tenant', true)
+        const days = optNumber(args, 'days')
+        return textResult(await client.tenants.stats(tenant, days !== undefined ? { days } : {}))
+      }
+      case 'get_dmarc_report': {
+        const domain = optString(args, 'domain')
+        if (!domain) return textResult('Missing required argument: domain', true)
+        return textResult(await client.dmarc.get(domain))
+      }
+      case 'enable_dmarc_monitoring': {
+        const domain = optString(args, 'domain')
+        if (!domain) return textResult('Missing required argument: domain', true)
+        const apply = optString(args, 'apply')
+        if (apply && apply !== 'cloudflare' && apply !== 'vercel' && apply !== 'godaddy') {
+          return textResult('apply must be cloudflare, vercel or godaddy', true)
+        }
+        return textResult(await client.dmarc.enable(domain, apply ? { apply: apply as 'cloudflare' | 'vercel' | 'godaddy' } : {}))
       }
       case 'get_deliverability': {
         const window = args.window === '7d' ? '7d' : '30d'
@@ -304,6 +431,15 @@ export async function callMcpTool(
           ...(cursor ? { cursor } : {}),
         }
         return textResult({ migration: await client.migrations.run(params) })
+      }
+      case 'get_import_report': {
+        let id = optString(args, 'id')
+        if (!id) {
+          const { data } = await client.migrations.list({ limit: 1 })
+          if (!data[0]) return textResult('No imports yet. Run import_from_provider first; previews are not stored.', true)
+          id = data[0].id
+        }
+        return textResult(await client.migrations.get(id))
       }
       default:
         return textResult(`Unknown tool: ${name}`, true)
@@ -360,6 +496,30 @@ const paginationProps = {
   cursor: { type: 'string', description: 'Opaque cursor for the next page' },
 }
 
+/** The tenant a tool acts on or filters by. */
+const tenantProp = (description: string) => ({
+  type: 'string',
+  description: `${description}. The tenant's external id (your id for that customer) or its Groundmail id`,
+})
+
+const tenantSettingsProps = {
+  name: { type: 'string', description: 'Display name' },
+  default_from_domain: {
+    type: ['string', 'null'],
+    description: 'Domain that completes a bare from (billing → billing@<domain>) on sends naming this tenant; null to clear',
+  },
+  stream_policy: {
+    type: 'string',
+    enum: ['all', 'transactional_only'],
+    description: 'all (default), or transactional_only to refuse product email for this tenant',
+  },
+  daily_limit: {
+    type: ['number', 'null'],
+    description: 'Most recipients per UTC day for this tenant; null for no tenant limit',
+  },
+  metadata: { type: ['object', 'null'], description: 'Your own data about the tenant (JSON object); null to clear' },
+}
+
 /** MCP tool annotations (https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations). */
 type ToolAnnotations = {
   title: string
@@ -390,12 +550,15 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   {
     name: 'send_email',
     description:
-      'Send a transactional email via Groundmail. Provide subject + html/text, or a published template_id / template_alias with optional variables.',
+      'Send a transactional email via Groundmail. Provide subject + html/text, or a published template_id / template_alias with optional variables. To test without delivering anything, send to a simulator address: delivered@, bounce@, block@, complaint@, suppressed@ or delayed@simulator.groundmail.dev (plus addressing like bounce+test1@ works); the result has test: true and webhooks fire as for real mail.',
     inputSchema: {
       type: 'object',
       properties: {
         from: { type: 'string', description: 'Sender address (must match a verified domain or sandbox sender)' },
-        to: { type: 'string', description: 'Recipient email address' },
+        to: {
+          type: 'string',
+          description: 'Recipient email address. A …@simulator.groundmail.dev address simulates an outcome and never delivers',
+        },
         subject: { type: 'string', description: 'Subject line. Optional when using a published template' },
         html: { type: 'string', description: 'HTML body. Do not combine with template_id or template_alias' },
         text: { type: 'string', description: 'Plain-text body. Do not combine with template_id or template_alias' },
@@ -407,6 +570,9 @@ export const MCP_TOOLS: McpToolDefinition[] = [
           description: 'Template variables when using template_id or template_alias',
           additionalProperties: true,
         },
+        tenant: tenantProp(
+          'Send as this tenant: the send uses its domains, suppression list, pause switch and daily limit. Omit to send from the account as a whole',
+        ),
       },
       required: ['from', 'to'],
     },
@@ -421,10 +587,14 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   },
   {
     name: 'list_emails',
-    description: 'List recent emails sent from this account.',
+    description: 'List recent emails sent from this account. Test emails (test keys, simulator addresses) have test: true.',
     inputSchema: {
       type: 'object',
-      properties: { ...paginationProps },
+      properties: {
+        ...paginationProps,
+        test: { type: 'boolean', description: 'true: only test emails; false: only live ones. Omit for both' },
+        tenant: tenantProp('Only emails sent as this tenant'),
+      },
     },
     outputSchema: pagedOutput('emails', emailItem, 'Emails on this page, newest first'),
     annotations: readOnly('List emails'),
@@ -447,7 +617,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     description: 'List sending domains for this account.',
     inputSchema: {
       type: 'object',
-      properties: { ...paginationProps },
+      properties: { ...paginationProps, tenant: tenantProp('Only domains this tenant owns') },
     },
     outputSchema: pagedOutput('domains', domainItem, 'Sending domains on this page'),
     annotations: readOnly('List domains'),
@@ -460,6 +630,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       properties: {
         name: { type: 'string', description: 'Domain name (example.com)' },
         inbound_enabled: { type: 'boolean', description: 'Enable inbound receiving on this domain' },
+        tenant: tenantProp('Give the domain to this tenant; only that tenant can then send from it'),
       },
       required: ['name'],
     },
@@ -545,6 +716,11 @@ export const MCP_TOOLS: McpToolDefinition[] = [
           items: { type: 'string' },
           description: 'Optional event types (defaults apply when omitted)',
         },
+        tenants: {
+          type: 'array',
+          items: { type: 'string' },
+          description: "Optional: only these tenants' email events (external ids or Groundmail ids). Omit for all",
+        },
       },
       required: ['url'],
     },
@@ -584,10 +760,25 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       properties: {
         ...paginationProps,
         email: { type: 'string', description: 'Optional filter by email' },
+        tenant: tenantProp("List this tenant's own suppression list instead of the account's"),
       },
     },
     outputSchema: pagedOutput('data', suppressionItem, 'Suppressed addresses on this page'),
     annotations: readOnly('List suppressions'),
+  },
+  {
+    name: 'validate_email',
+    description:
+      'Check one email address with Groundmail validation before accepting it (for example at signup): verdict valid | risky | invalid, reasons, a typo suggestion, and disposable / role flags. Free; sends nothing.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        email: { type: 'string', description: 'Email address to check' },
+      },
+      required: ['email'],
+    },
+    outputSchema: validateEmailOutput,
+    annotations: readOnly('Validate email address'),
   },
   {
     name: 'add_suppression',
@@ -597,6 +788,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       properties: {
         email: { type: 'string', description: 'Email address to stop sending to' },
         reason: { type: 'string', description: 'Optional note on why the address is suppressed' },
+        tenant: tenantProp("Add to this tenant's own list instead of the account's"),
       },
       required: ['email'],
     },
@@ -618,6 +810,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       properties: {
         id: { type: 'string', description: 'Suppression id' },
         email: { type: 'string', description: 'Email address (alternative to id)' },
+        tenant: tenantProp("Remove the address (by email) from this tenant's own list"),
       },
     },
     outputSchema: okOutput,
@@ -716,6 +909,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
           type: 'boolean',
           description: 'When true (default), enqueue delivery to account webhooks',
         },
+        tenant: tenantProp('Put this tenant on the test event, to test endpoints that only receive some tenants'),
       },
       required: ['event'],
     },
@@ -725,6 +919,165 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: false,
+      openWorldHint: true,
+    },
+  },
+  {
+    name: 'list_tenants',
+    description:
+      'List tenants: one per customer you send email for, each with its own domains, suppression list, stats, pause switch and daily limit. Tenants are included on the Scale and Dedicated plans.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...paginationProps,
+        status: { type: 'string', enum: ['active', 'paused'], description: 'Optional filter by status' },
+      },
+    },
+    outputSchema: pagedOutput('data', tenantItem, 'Tenants on this page, newest first'),
+    annotations: readOnly('List tenants'),
+  },
+  {
+    name: 'create_tenant',
+    description:
+      'Create a tenant for one of your customers. Then send with tenant set to its external id, and give it its own domains with create_domain (tenant).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        external_id: {
+          type: 'string',
+          description: 'Your id for this customer: 1–128 characters of letters, digits and . _ : @ -. Cannot be changed later',
+        },
+        ...tenantSettingsProps,
+      },
+      required: ['external_id'],
+    },
+    outputSchema: tenantOutput,
+    annotations: {
+      title: 'Create tenant',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: 'get_tenant',
+    description: 'Get one tenant, including whether it is paused and why.',
+    inputSchema: {
+      type: 'object',
+      properties: { tenant: tenantProp('The tenant') },
+      required: ['tenant'],
+    },
+    outputSchema: tenantOutput,
+    annotations: readOnly('Get tenant'),
+  },
+  {
+    name: 'update_tenant',
+    description: "Change a tenant's name, default from domain, stream policy, daily limit or metadata.",
+    inputSchema: {
+      type: 'object',
+      properties: { tenant: tenantProp('The tenant to change'), ...tenantSettingsProps },
+      required: ['tenant'],
+    },
+    outputSchema: tenantOutput,
+    annotations: {
+      title: 'Update tenant',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: 'pause_tenant',
+    description:
+      "Pause a tenant: its new sends are refused until it is resumed. The rest of the account keeps sending. Confirm with the user first.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tenant: tenantProp('The tenant to pause'),
+        reason: { type: 'string', description: 'Why it is paused (shown on the tenant)' },
+      },
+      required: ['tenant'],
+    },
+    outputSchema: tenantOutput,
+    annotations: {
+      title: 'Pause tenant',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: 'resume_tenant',
+    description:
+      'Resume a paused tenant so it can send again. A tenant Groundmail paused (pause_source automated or admin) cannot be resumed this way; the user should fix the cause and contact support.',
+    inputSchema: {
+      type: 'object',
+      properties: { tenant: tenantProp('The tenant to resume') },
+      required: ['tenant'],
+    },
+    outputSchema: tenantOutput,
+    annotations: {
+      title: 'Resume tenant',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: 'get_tenant_stats',
+    description:
+      "A tenant's email counts, bounce and complaint rates over the last days (1–90, default 7), and its sending ramp today.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tenant: tenantProp('The tenant'),
+        days: { type: 'number', description: 'Days to cover, 1–90 (default 7)' },
+      },
+      required: ['tenant'],
+    },
+    outputSchema: tenantStatsOutput,
+    annotations: readOnly('Get tenant stats'),
+  },
+  {
+    name: 'get_dmarc_report',
+    description:
+      'DMARC monitoring for a sending domain: who sends mail as it (grouped by provider, with unknown senders flagged as possible spoofing), SPF/DKIM/DMARC pass rates over the last 30 days, and whether it is safe to move the DMARC policy to quarantine. If monitoring is off, shows the current DMARC record; turn it on with enable_dmarc_monitoring.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        domain: { type: 'string', description: 'Domain name or id (example.com)' },
+      },
+      required: ['domain'],
+    },
+    outputSchema: dmarcOutput,
+    annotations: readOnly('Get DMARC report'),
+  },
+  {
+    name: 'enable_dmarc_monitoring',
+    description:
+      'Turn on free DMARC monitoring for a sending domain. Returns the report address and the exact DMARC record to publish (the current record with the address added to rua=, keeping the policy and other report addresses). Pass apply to update the record through a DNS provider connected in the dashboard. Reports start arriving within 24 to 48 hours.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        domain: { type: 'string', description: 'Domain name or id (example.com)' },
+        apply: {
+          type: 'string',
+          enum: ['cloudflare', 'vercel', 'godaddy'],
+          description: 'Also write the DMARC record through this DNS provider (connected under Settings → Integrations)',
+        },
+      },
+      required: ['domain'],
+    },
+    outputSchema: dmarcOutput,
+    annotations: {
+      title: 'Enable DMARC monitoring',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
       openWorldHint: true,
     },
   },
@@ -774,6 +1127,19 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       idempotentHint: true,
       openWorldHint: true,
     },
+  },
+  {
+    name: 'get_import_report',
+    description:
+      'Beta. The stored report of an import from SendGrid, Postmark or Mailgun: what was imported, skipped and failed, the DNS changes per domain, what still needs doing, the code change and a prompt for it. Pass the import id, or omit it for the latest import. Previews are not stored.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Import id (the `id` from import_from_provider). Omit for the latest import.' },
+      },
+    },
+    outputSchema: migrationOutput,
+    annotations: readOnly('Get an import report'),
   },
 ]
 

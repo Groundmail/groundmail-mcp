@@ -54,6 +54,18 @@ export function pagedOutput(key: string, item: Schema, description: string): Obj
   )
 }
 
+function heldBackItem(): Schema {
+  return object(
+    {
+      email: string('The held-back address'),
+      reason: string(
+        'Why: invalid_address (cannot exist), no_mail_server (domain takes no email), previously_bounced (hard-bounced for a Groundmail sender in the last 90 days) or mailbox_not_found',
+      ),
+    },
+    ['email', 'reason'],
+  )
+}
+
 export const emailItem: Schema = object(
   {
     id: string('Email id (msg_…)'),
@@ -66,6 +78,19 @@ export const emailItem: Schema = object(
     status: string('Current delivery status, for example sent, delivered or bounced'),
     last_event: nullableString('Most recent delivery event, if any'),
     bounce_reason: nullableString('Reason reported when the email bounced'),
+    bounce_type: {
+      type: ['string', 'null'],
+      enum: ['hard', 'block', null],
+      description:
+        'Why it bounced: hard (address cannot receive; suppressed) or block (the receiving server refused the sender for reputation or policy; address not suppressed, safe to retry later). Null if it did not bounce',
+    },
+    held_back: arrayOf(
+      heldBackItem(),
+      'Recipients Groundmail validation held back before sending, with why; empty when none were',
+    ),
+    test: boolean(
+      'True when the email never reached the mail server: sent with a test key (gm_test_…) or only to simulator addresses. Its status and events are simulated',
+    ),
     tags: { description: 'Tags attached to the email' },
     scheduled_at: nullableString('When the email is scheduled to send (ISO 8601)'),
     cancelled_at: nullableString('When the scheduled email was cancelled (ISO 8601)'),
@@ -75,6 +100,7 @@ export const emailItem: Schema = object(
     bounced_at: nullableString('When the email bounced (ISO 8601)'),
     opened_at: nullableString('First open (ISO 8601); needs open tracking on the sending domain'),
     clicked_at: nullableString('First tracked-link click (ISO 8601); needs click tracking on the sending domain'),
+    tenant: nullableString('External id of the tenant the email was sent as. Present only when it was sent as a tenant'),
   },
   ['id', 'from', 'to', 'subject', 'status'],
 )
@@ -94,6 +120,7 @@ export const domainItem: Schema = object(
     inbound_enabled: boolean('Whether inbound receiving is enabled'),
     inbound_status: string('Inbound status: disabled, pending, active or error'),
     inbound_error: nullableString('Inbound setup error, if any'),
+    tenant: nullableString('External id of the tenant that owns the domain. Absent for a domain the whole account can use'),
   },
   ['id', 'name', 'status'],
 )
@@ -117,6 +144,7 @@ export const webhookItem: Schema = object(
     url: string('URL that receives events'),
     events: stringArray('Event types delivered to this endpoint'),
     enabled: boolean('Whether the endpoint receives events'),
+    tenants: stringArray('Present only when the endpoint receives email events for some tenants only: their external ids'),
     created_at: string('When the endpoint was created (ISO 8601)'),
     updated_at: string('When the endpoint was last changed (ISO 8601)'),
   },
@@ -129,6 +157,7 @@ export const suppressionItem: Schema = object(
     email: string('Suppressed email address'),
     reason: nullableString('Why the address was suppressed'),
     source: string('How the suppression was created, for example api or bounce'),
+    tenant: string('External id of the tenant, on an entry of a tenant\'s own suppression list'),
     created_at: string('When the suppression was created (ISO 8601)'),
     updated_at: string('When the suppression was last changed (ISO 8601)'),
   },
@@ -152,7 +181,7 @@ export const templateItem: Schema = object(
       description: 'Variable names the template uses',
     },
     unsubscribe_enabled: boolean('Whether managed unsubscribe is on for sends using this template'),
-    category: string('transactional, product or newsletter'),
+    category: string('transactional or product'),
     published_version_id: nullableString('Id of the version sends currently use'),
     published_at: nullableString('When the template was last published (ISO 8601)'),
     created_at: string('When the template was created (ISO 8601)'),
@@ -188,8 +217,32 @@ export const sendEmailOutput: ObjectSchema = object(
   {
     id: string('Email id (msg_…)'),
     status: string('Status after the request, for example queued or scheduled'),
+    held_back: arrayOf(
+      heldBackItem(),
+      'Present when Groundmail validation held some recipients back; the email went to the rest',
+    ),
+    test: boolean('Present and true on a test send (test key or simulator addresses): nothing was delivered'),
   },
   ['id', 'status'],
+)
+
+export const validateEmailOutput: ObjectSchema = object(
+  {
+    email: string('The address as checked (trimmed, lowercased)'),
+    domain: nullableString('Domain part of the address; null when there is none'),
+    verdict: {
+      type: 'string',
+      enum: ['valid', 'risky', 'invalid'],
+      description: 'valid: safe to send; risky: deliverable but worth a second look; invalid: cannot receive email',
+    },
+    reasons: stringArray(
+      'What was found: syntax, no_mail_server, mailbox_not_found, previously_bounced (invalid); disposable, catch_all, possible_typo (risky); role (informational)',
+    ),
+    suggestion: nullableString('The address with a likely-mistyped domain corrected, for example ada@gmail.com for ada@gmial.com'),
+    disposable: boolean('A throwaway-inbox service'),
+    role: boolean('A team or queue mailbox such as info@ or support@'),
+  },
+  ['email', 'verdict', 'reasons', 'suggestion', 'disposable', 'role'],
 )
 
 export const getEmailOutput: ObjectSchema = object({ email: described(emailItem, 'The email') }, ['email'])
@@ -302,7 +355,40 @@ export const deliverabilityOutput: ObjectSchema = object(
 
 const anyObject = (description: string): Schema => ({ type: 'object', description })
 
-/** `import_from_provider`: the combined report of every request of one import. */
+/** `get_dmarc_report` and `enable_dmarc_monitoring`: DMARC monitoring for one domain. */
+export const dmarcOutput: ObjectSchema = object(
+  {
+    dmarc: described(
+      object(
+        {
+          domain: string('Monitored domain'),
+          enabled: boolean('True when monitoring is on'),
+          status: string('waiting (no report yet), receiving, or disabled'),
+          report_address: string('Where receivers send the domain\'s aggregate reports'),
+          rua: string('The rua= value to add to the DMARC record (mailto:<report_address>)'),
+          dns: anyObject('The DMARC record now (host, record, policy), whether it lists the report address (rua_present), and suggested_record: the record to publish'),
+          digest_enabled: boolean('True when the weekly digest email is on'),
+          last_report_at: nullableString('End of the newest report received (ISO 8601)'),
+          window_days: number('Days of reports the summary covers'),
+          summary: anyObject('Totals: messages, dmarc_pass, dmarc_fail, pass_rate (0-1), reports, reporters'),
+          sources: arrayOf(
+            anyObject('A sending source: name, provider, status (passing, failing, or unknown = possible spoofing), messages, pass_rate, spf_aligned_rate, dkim_aligned_rate, ips'),
+            'Who sends mail as the domain, grouped by provider, busiest first',
+          ),
+          daily: arrayOf(anyObject('date, messages, dmarc_pass, pass_rate'), 'Pass rate by day'),
+          readiness: anyObject('Whether it is safe to enforce DMARC: verdict (no_data, collecting, fix_sources, ready_quarantine, ready_reject, enforced), label, detail, blocking_sources'),
+        },
+        ['domain', 'enabled'],
+      ),
+      'DMARC monitoring for the domain',
+    ),
+    applied: { type: ['object', 'null'], description: 'When apply was used: the DNS provider and what changed' },
+    apply_error: string('Why the DNS provider could not update the record (add it by hand instead)'),
+  },
+  ['dmarc'],
+)
+
+/** `import_from_provider` and `get_import_report`: the combined report of every request of one import. */
 export const migrationOutput: ObjectSchema = object(
   {
     migration: described(
@@ -317,10 +403,14 @@ export const migrationOutput: ObjectSchema = object(
           has_more: boolean('True if the import stopped early; call the tool again with `cursor` to continue'),
           next_cursor: nullableString('Pass as `cursor` to continue an import that stopped early'),
           retry_after_seconds: { type: ['number', 'null'], description: 'Wait this long before continuing' },
-          domains: anyObject('Totals and one item per domain, with the DNS records to publish'),
+          domains: anyObject(
+            'Totals and one item per domain, with the DNS records and `dns_plan`: each record compared with what the domain publishes today (add, update an existing SPF record, keep the existing DMARC record, or already published), and which old-provider records to keep until the cutover',
+          ),
           webhooks: anyObject('Totals and one item per webhook (created disabled), with mapped events and the signing secret'),
           templates: anyObject('Totals and one item per template, with its alias and conversion notes'),
-          suppressions: anyObject('Totals by type (bounce, complaint, unsubscribe, manual) and skip reasons'),
+          suppressions: anyObject(
+            'Totals by type (bounce, complaint, unsubscribe, manual, product_opt_out) and skip reasons (for example bounces caused by a block on the old provider, which are not suppressed)',
+          ),
           errors: arrayOf(anyObject('A resource that could not be read'), 'Resources that could not be read at all'),
           notes: stringArray('What was left out on purpose, and why'),
           attention: stringArray('What the user still needs to do'),
@@ -334,4 +424,84 @@ export const migrationOutput: ObjectSchema = object(
     ),
   },
   ['migration'],
+)
+
+const nullableNumber = (description: string): Schema => ({ type: ['number', 'null'], description })
+
+export const tenantItem: Schema = object(
+  {
+    id: string('Groundmail tenant id'),
+    object: string('Always tenant'),
+    external_id: string('Your id for this customer; unique in the account'),
+    name: nullableString('Display name'),
+    status: { type: 'string', enum: ['active', 'paused'], description: 'active, or paused (new sends are refused)' },
+    paused_reason: nullableString('Why the tenant was paused'),
+    paused_at: nullableString('When the tenant was paused (ISO 8601)'),
+    pause_source: {
+      type: ['string', 'null'],
+      enum: ['api', 'admin', 'automated', null],
+      description:
+        'Who paused it: api (you), admin (Groundmail support) or automated (Groundmail\'s bounce and complaint checks). Only a tenant paused over the API can be resumed over the API',
+    },
+    default_from_domain: nullableString('Completes a bare from (billing → billing@<domain>) on sends that name this tenant'),
+    stream_policy: string('all, or transactional_only (product email is refused for this tenant)'),
+    daily_limit: nullableNumber('Most recipients per UTC day for this tenant; null for no tenant limit'),
+    metadata: { type: ['object', 'null'], description: 'Your own data about the tenant' },
+    created_at: string('When the tenant was created (ISO 8601)'),
+    updated_at: string('When the tenant was last changed (ISO 8601)'),
+  },
+  ['id', 'external_id', 'status'],
+)
+
+export const tenantOutput: ObjectSchema = object({ tenant: described(tenantItem, 'The tenant') }, ['tenant'])
+
+const streamCounts = (description: string): Schema => ({
+  ...object({
+    transactional: nullableNumber('Transactional email recipients'),
+    product: nullableNumber('Product email recipients'),
+  }),
+  description,
+})
+
+export const tenantStatsOutput: ObjectSchema = object(
+  {
+    tenant: string('External id of the tenant'),
+    stats: described(
+      object(
+        {
+          object: string('Always tenant_stats'),
+          days: number('Days covered'),
+          from: string('Start of the window (ISO 8601)'),
+          total: number('Emails created in the window'),
+          queued: number('Emails waiting to be sent'),
+          scheduled: number('Emails still scheduled'),
+          sent: number('Emails handed off for delivery'),
+          delivered: number('Emails delivered'),
+          bounced: number('Emails that bounced'),
+          complained: number('Emails reported as spam'),
+          failed: number('Emails that failed'),
+          suppressed: number('Emails not sent because the recipient was suppressed'),
+          opened: number('Emails opened'),
+          clicked: number('Emails with a tracked click'),
+          bounce_rate: number('Bounced / (delivered + bounced + complained), as a fraction'),
+          complaint_rate: number('Complained / (delivered + bounced + complained), as a fraction'),
+        },
+        ['days', 'total'],
+      ),
+      'Email counts and rates over the window',
+    ),
+    ramp: described(
+      object({
+        object: string('Always tenant_ramp'),
+        active: boolean('True when a ramp-up daily limit applies to this tenant today'),
+        stage: nullableNumber('Ramp-up stage, 1-based; null when the ramp does not apply'),
+        daily_limit: { ...streamCounts('Today\'s limit for each stream'), type: ['object', 'null'] },
+        used_today: streamCounts('Recipients sent today on each stream'),
+        completed: boolean('True when the tenant finished its ramp-up'),
+        resets_at: string('The next 00:00 UTC (ISO 8601)'),
+      }),
+      'The tenant\'s sending ramp today, when known',
+    ),
+  },
+  ['tenant', 'stats'],
 )

@@ -18,6 +18,7 @@ const email = {
   status: 'delivered',
   last_event: 'email.delivered',
   bounce_reason: null,
+  held_back: [],
   tags: [],
   scheduled_at: null,
   cancelled_at: null,
@@ -79,6 +80,22 @@ const template = {
   created_at: NOW,
   updated_at: NOW,
 }
+const tenant = {
+  id: 'ten_1',
+  object: 'tenant',
+  external_id: 'acme',
+  name: 'Acme',
+  status: 'active',
+  paused_reason: null,
+  paused_at: null,
+  pause_source: null,
+  default_from_domain: null,
+  stream_policy: 'all',
+  daily_limit: 500,
+  metadata: { plan: 'pro' },
+  created_at: NOW,
+  updated_at: NOW,
+}
 const page = { has_more: false, next_cursor: null }
 const bucket = {
   total_emails: 1,
@@ -101,6 +118,7 @@ const bucket = {
 
 /** What the API returns for each tool's request, as the routes build it. */
 const API_RESPONSES: Record<string, unknown> = {
+  get_import_report: undefined,
   import_from_provider: {
     migration: {
       id: 'mig_1',
@@ -155,6 +173,15 @@ const API_RESPONSES: Record<string, unknown> = {
   list_suppressions: { data: [suppression], ...page },
   add_suppression: { suppression },
   remove_suppression: { ok: true },
+  validate_email: {
+    email: 'ada@gmial.com',
+    domain: 'gmial.com',
+    verdict: 'risky',
+    reasons: ['possible_typo'],
+    suggestion: 'ada@gmail.com',
+    disposable: false,
+    role: false,
+  },
   list_templates: { data: [template], ...page },
   get_template: { template },
   create_template: { template },
@@ -164,6 +191,42 @@ const API_RESPONSES: Record<string, unknown> = {
     payload: { type: 'email.bounced' },
     delivered: true,
     deliveries: [{ endpoint_id: 'wh_1', url: 'https://example.com/hooks', success: true, status: 200 }],
+  },
+  list_tenants: { data: [tenant], ...page },
+  create_tenant: { tenant },
+  get_tenant: { tenant },
+  update_tenant: { tenant },
+  pause_tenant: { tenant: { ...tenant, status: 'paused', paused_reason: 'unpaid', paused_at: NOW, pause_source: 'api' } },
+  resume_tenant: { tenant },
+  get_tenant_stats: {
+    tenant: 'acme',
+    stats: {
+      object: 'tenant_stats',
+      days: 7,
+      from: NOW,
+      total: 10,
+      queued: 0,
+      scheduled: 0,
+      sent: 10,
+      delivered: 9,
+      bounced: 1,
+      complained: 0,
+      failed: 0,
+      suppressed: 0,
+      opened: 2,
+      clicked: 1,
+      bounce_rate: 0.1,
+      complaint_rate: 0,
+    },
+    ramp: {
+      object: 'tenant_ramp',
+      active: true,
+      stage: 1,
+      daily_limit: { transactional: 300, product: 100 },
+      used_today: { transactional: 4, product: 0 },
+      completed: false,
+      resets_at: NOW,
+    },
   },
   get_deliverability: {
     window: '30d',
@@ -176,6 +239,30 @@ const API_RESPONSES: Record<string, unknown> = {
   },
 }
 
+API_RESPONSES.get_dmarc_report = {
+  dmarc: { domain: 'example.com', enabled: false, status: 'disabled', dns: { host: '_dmarc.example.com', record: null, policy: null } },
+}
+API_RESPONSES.enable_dmarc_monitoring = {
+  dmarc: {
+    domain: 'example.com',
+    enabled: true,
+    status: 'waiting',
+    report_address: 'abcdefghijkmnpqr@dmarc.groundmail.dev',
+    rua: 'mailto:abcdefghijkmnpqr@dmarc.groundmail.dev',
+    dns: { host: '_dmarc.example.com', record: null, rua_present: false, policy: null, suggested_record: 'v=DMARC1; p=none; rua=mailto:abcdefghijkmnpqr@dmarc.groundmail.dev' },
+    digest_enabled: true,
+    last_report_at: null,
+    window_days: 30,
+    summary: { messages: 0, dmarc_pass: 0, dmarc_fail: 0, pass_rate: 0, reports: 0, reporters: [] },
+    sources: [],
+    daily: [],
+    readiness: { verdict: 'no_data', label: 'Waiting for reports', detail: 'Soon.', days_of_data: 0, blocking_sources: [] },
+  },
+  applied: null,
+}
+
+API_RESPONSES.get_import_report = API_RESPONSES.import_from_provider
+
 const TOOL_ARGS: Record<string, Record<string, unknown>> = {
   send_email: { from: 'noreply@example.com', to: 'ada@example.com', subject: 'Hi', text: 'Hi' },
   get_email: { id: 'msg_1' },
@@ -186,21 +273,42 @@ const TOOL_ARGS: Record<string, Record<string, unknown>> = {
   delete_webhook: { id: 'wh_1' },
   add_suppression: { email: 'a@example.com' },
   remove_suppression: { email: 'a@example.com' },
+  validate_email: { email: 'ada@gmial.com' },
   get_template: { alias: 'welcome' },
   create_template: { name: 'Welcome', subject: 'Hi' },
   publish_template: { alias: 'welcome' },
   send_test_webhook_event: { event: 'email.bounced' },
   import_from_provider: { provider: 'sendgrid', api_key: 'SG.test_key_value', dry_run: true },
+  get_import_report: { id: 'mig_1' },
+  create_tenant: { external_id: 'acme', name: 'Acme', daily_limit: 500 },
+  get_tenant: { tenant: 'acme' },
+  update_tenant: { tenant: 'acme', daily_limit: 500 },
+  pause_tenant: { tenant: 'acme', reason: 'unpaid' },
+  resume_tenant: { tenant: 'acme' },
+  get_tenant_stats: { tenant: 'acme', days: 7 },
+  get_dmarc_report: { domain: 'example.com' },
+  enable_dmarc_monitoring: { domain: 'example.com' },
 }
 
 /** Which tool a request belongs to, by method and path. */
 function toolForRequest(method: string, path: string, body: string | undefined): string {
   const action = body ? (JSON.parse(body) as { action?: string }).action : undefined
-  if (path.startsWith('/migrations')) return 'import_from_provider'
+  if (path.startsWith('/tenants/')) {
+    if (path.includes('/stats')) return 'get_tenant_stats'
+    if (method === 'GET') return 'get_tenant'
+    const status = body ? (JSON.parse(body) as { status?: string }).status : undefined
+    if (status === 'paused') return 'pause_tenant'
+    if (status === 'active') return 'resume_tenant'
+    return 'update_tenant'
+  }
+  if (path.startsWith('/tenants')) return method === 'POST' ? 'create_tenant' : 'list_tenants'
+  if (path.startsWith('/migrations')) return method === 'POST' ? 'import_from_provider' : 'get_import_report'
   if (path.startsWith('/emails/test')) return 'send_test_webhook_event'
   if (path.startsWith('/emails/')) return 'get_email'
   if (path.startsWith('/emails')) return method === 'POST' ? 'send_email' : 'list_emails'
   if (path.startsWith('/deliverability')) return 'get_deliverability'
+  if (path.startsWith('/validate')) return 'validate_email'
+  if (path.endsWith('/dmarc')) return method === 'POST' ? 'enable_dmarc_monitoring' : 'get_dmarc_report'
   if (path.startsWith('/domains/')) return action === 'apply' ? 'apply_domain_dns' : 'verify_domain'
   if (path.startsWith('/domains')) return method === 'POST' ? 'create_domain' : 'list_domains'
   if (path.startsWith('/webhooks/')) return 'delete_webhook'
@@ -256,7 +364,7 @@ describe('tool definitions', () => {
     const { client } = await connect()
     const { tools } = await client.listTools()
     expect(tools.map((tool) => tool.name).sort()).toEqual(MCP_TOOLS.map((tool) => tool.name).sort())
-    expect(tools).toHaveLength(20)
+    expect(tools).toHaveLength(31)
   })
 
   it('gives every tool a description, a title and complete annotations', async () => {
@@ -300,7 +408,7 @@ describe('tool definitions', () => {
   it('marks read tools read-only and destructive tools destructive', () => {
     const byName = new Map(MCP_TOOLS.map((tool) => [tool.name, tool.annotations]))
     for (const [name, hints] of byName) {
-      if (/^(list|get)_/.test(name)) {
+      if (/^(list|get|validate)_/.test(name)) {
         expect(hints, name).toMatchObject({ readOnlyHint: true, destructiveHint: false, idempotentHint: true })
       } else {
         expect(hints.readOnlyHint, name).toBe(false)

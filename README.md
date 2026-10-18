@@ -55,7 +55,7 @@ When you connect, you choose the access: **Full**, **Send only** or **Read only*
 >
 > "How is my deliverability over the last 7 days?"
 
-Tools cover emails (send, schedule, cancel, look up), domains (add, apply DNS, verify), templates, webhooks, suppressions and deliverability. Each tool carries read-only and destructive annotations and an output schema. Full list: [docs.groundmail.dev/ai/mcp](https://docs.groundmail.dev/ai/mcp).
+Tools cover emails (send, schedule, cancel, look up), domains (add, apply DNS, verify), templates, webhooks, suppressions, deliverability and tenants (one per customer you send for: create, update, pause, resume, stats; `tenant` on sends, domains and suppressions). Each tool carries read-only and destructive annotations and an output schema. Full list: [docs.groundmail.dev/ai/mcp](https://docs.groundmail.dev/ai/mcp).
 
 ## Transports
 
