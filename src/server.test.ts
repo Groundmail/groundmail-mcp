@@ -173,6 +173,21 @@ const API_RESPONSES: Record<string, unknown> = {
   list_suppressions: { data: [suppression], ...page },
   add_suppression: { suppression },
   remove_suppression: { ok: true },
+  list_category_opt_outs: {
+    data: [
+      {
+        id: 'opt_1',
+        type: 'category_opt_out',
+        email: 'a@example.com',
+        category: 'newsletter',
+        tenant: 'acme',
+        created_at: '2026-10-19T00:00:00.000Z',
+        updated_at: '2026-10-19T00:00:00.000Z',
+      },
+    ],
+    ...page,
+  },
+  remove_category_opt_out: { ok: true, deleted: 1 },
   validate_email: {
     email: 'ada@gmial.com',
     domain: 'gmial.com',
@@ -273,6 +288,7 @@ const TOOL_ARGS: Record<string, Record<string, unknown>> = {
   delete_webhook: { id: 'wh_1' },
   add_suppression: { email: 'a@example.com' },
   remove_suppression: { email: 'a@example.com' },
+  remove_category_opt_out: { email: 'a@example.com', category: 'newsletter', tenant: 'acme' },
   validate_email: { email: 'ada@gmial.com' },
   get_template: { alias: 'welcome' },
   create_template: { name: 'Welcome', subject: 'Hi' },
@@ -313,6 +329,9 @@ function toolForRequest(method: string, path: string, body: string | undefined):
   if (path.startsWith('/domains')) return method === 'POST' ? 'create_domain' : 'list_domains'
   if (path.startsWith('/webhooks/')) return 'delete_webhook'
   if (path.startsWith('/webhooks')) return method === 'POST' ? 'create_webhook' : 'list_webhooks'
+  if (path.startsWith('/suppressions') && path.includes('type=category_opt_out')) {
+    return method === 'DELETE' ? 'remove_category_opt_out' : 'list_category_opt_outs'
+  }
   if (path.startsWith('/suppressions')) {
     if (method === 'DELETE') return 'remove_suppression'
     return method === 'POST' ? 'add_suppression' : 'list_suppressions'
@@ -364,7 +383,7 @@ describe('tool definitions', () => {
     const { client } = await connect()
     const { tools } = await client.listTools()
     expect(tools.map((tool) => tool.name).sort()).toEqual(MCP_TOOLS.map((tool) => tool.name).sort())
-    expect(tools).toHaveLength(31)
+    expect(tools).toHaveLength(33)
   })
 
   it('gives every tool a description, a title and complete annotations', async () => {
@@ -415,7 +434,7 @@ describe('tool definitions', () => {
       }
     }
     const destructive = [...byName].filter(([, hints]) => hints.destructiveHint).map(([name]) => name)
-    expect(destructive.sort()).toEqual(['apply_domain_dns', 'delete_webhook', 'remove_suppression'])
+    expect(destructive.sort()).toEqual(['apply_domain_dns', 'delete_webhook', 'remove_category_opt_out', 'remove_suppression'])
     for (const name of ['send_email', 'send_test_webhook_event']) {
       expect(byName.get(name), name).toMatchObject({
         readOnlyHint: false,

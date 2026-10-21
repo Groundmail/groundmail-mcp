@@ -9,6 +9,8 @@ import type {
 } from 'groundmail'
 import {
   applyDnsOutput,
+  categoryOptOutItem,
+  removeCategoryOptOutOutput,
   createWebhookOutput,
   deliverabilityOutput,
   dmarcOutput,
@@ -117,6 +119,7 @@ const EMAIL_WEBHOOK_EVENTS = new Set<string>([
   'email.sent',
   'email.delivered',
   'email.delivery_delayed',
+  'email.held',
   'email.bounced',
   'email.complained',
   'email.opened',
@@ -143,6 +146,11 @@ export async function callMcpTool(
         if (!templateId && !subject) {
           return textResult('Provide subject, or template_id / template_alias', true)
         }
+        const categoryRaw = optString(args, 'category')
+        if (categoryRaw && categoryRaw !== 'transactional' && categoryRaw !== 'product' && categoryRaw !== 'newsletter') {
+          return textResult('category must be transactional, product or newsletter', true)
+        }
+        const category = categoryRaw as 'transactional' | 'product' | 'newsletter' | undefined
         const variables =
           args.variables && typeof args.variables === 'object' && !Array.isArray(args.variables)
             ? (args.variables as Record<string, string | number | boolean>)
@@ -154,6 +162,7 @@ export async function callMcpTool(
           html: optString(args, 'html'),
           text: optString(args, 'text'),
           reply_to: optString(args, 'reply_to'),
+          ...(category ? { category: category as 'product' | 'newsletter' } : {}),
           ...(optString(args, 'tenant') ? { tenant: optString(args, 'tenant') } : {}),
           ...(templateId
             ? { template: { id: templateId, ...(variables ? { variables } : {}) } }
@@ -162,11 +171,17 @@ export async function callMcpTool(
         return textResult(result)
       }
       case 'list_emails': {
+        const streamRaw = optString(args, 'stream')
+        if (streamRaw && streamRaw !== 'transactional' && streamRaw !== 'product' && streamRaw !== 'newsletter') {
+          return textResult('stream must be transactional, product or newsletter', true)
+        }
+        const stream = streamRaw as 'transactional' | 'product' | 'newsletter' | undefined
         const result = await client.emails.list({
           limit: optNumber(args, 'limit'),
           cursor: optString(args, 'cursor'),
           ...(typeof args.test === 'boolean' ? { test: args.test } : {}),
           ...(optString(args, 'tenant') ? { tenant: optString(args, 'tenant') } : {}),
+          ...(stream ? { stream } : {}),
         })
         return textResult(result)
       }
@@ -284,6 +299,39 @@ export async function callMcpTool(
         const tenant = optString(args, 'tenant')
         return textResult(tenant ? await client.suppressions.remove(idOrEmail, { tenant }) : await client.suppressions.remove(idOrEmail))
       }
+      case 'list_category_opt_outs': {
+        const category = optString(args, 'category')
+        if (category && category !== 'product' && category !== 'newsletter') {
+          return textResult('category must be product or newsletter', true)
+        }
+        return textResult(
+          await client.suppressions.listCategoryOptOuts({
+            limit: optNumber(args, 'limit'),
+            cursor: optString(args, 'cursor'),
+            email: optString(args, 'email'),
+            ...(category ? { category: category as 'product' | 'newsletter' } : {}),
+            ...(optString(args, 'tenant') ? { tenant: optString(args, 'tenant') } : {}),
+            ...(args.include_tenants === true ? { includeTenants: true } : {}),
+          }),
+        )
+      }
+      case 'remove_category_opt_out': {
+        const idOrEmail = optString(args, 'id') ?? optString(args, 'email')
+        if (!idOrEmail) {
+          return textResult('Missing required argument: id or email', true)
+        }
+        const category = optString(args, 'category')
+        if (category && category !== 'product' && category !== 'newsletter') {
+          return textResult('category must be product or newsletter', true)
+        }
+        const tenant = optString(args, 'tenant')
+        return textResult(
+          await client.suppressions.removeCategoryOptOut(idOrEmail, {
+            ...(category ? { category: category as 'product' | 'newsletter' } : {}),
+            ...(tenant ? { tenant } : {}),
+          }),
+        )
+      }
       case 'list_templates': {
         const status = optString(args, 'status')
         return textResult(
@@ -313,6 +361,7 @@ export async function callMcpTool(
             html: optString(args, 'html'),
             text: optString(args, 'text'),
             alias: optString(args, 'alias'),
+            ...(optString(args, 'folder') ? { folder: optString(args, 'folder') } : {}),
           }),
         )
       }
@@ -570,6 +619,12 @@ export const MCP_TOOLS: McpToolDefinition[] = [
           description: 'Template variables when using template_id or template_alias',
           additionalProperties: true,
         },
+        category: {
+          type: 'string',
+          enum: ['transactional', 'product', 'newsletter'],
+          description:
+            'transactional (default): sign-in codes, receipts, alerts. product: onboarding, lifecycle and notification email, with one-click unsubscribe. newsletter: opt-in newsletters, for approved accounts only (otherwise the send fails with newsletter_not_enabled), sent from separate IPs with one-click unsubscribe',
+        },
         tenant: tenantProp(
           'Send as this tenant: the send uses its domains, suppression list, pause switch and daily limit. Omit to send from the account as a whole',
         ),
@@ -594,6 +649,11 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         ...paginationProps,
         test: { type: 'boolean', description: 'true: only test emails; false: only live ones. Omit for both' },
         tenant: tenantProp('Only emails sent as this tenant'),
+        stream: {
+          type: 'string',
+          enum: ['transactional', 'product', 'newsletter'],
+          description: 'Only emails sent on this mail stream',
+        },
       },
     },
     outputSchema: pagedOutput('emails', emailItem, 'Emails on this page, newest first'),
@@ -646,7 +706,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   {
     name: 'apply_domain_dns',
     description:
-      'Apply Groundmail DNS records for a domain. Cloudflare and GoDaddy can use credentials stored in the dashboard; GoDaddy also accepts one-time credentials on the request.',
+      'Apply Groundmail DNS records for a domain through Cloudflare, Vercel or GoDaddy. Uses the provider connected in the dashboard (Integrations), or one-time credentials passed on the request.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -658,7 +718,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         },
         credentials: {
           type: 'object',
-          description: 'Optional inline registrar credentials (GoDaddy api key/secret)',
+          description: 'Optional one-time credentials: Cloudflare apiToken (and zoneId), Vercel apiToken (and teamId), or GoDaddy apiKey and apiSecret',
         },
       },
       required: ['domain', 'provider'],
@@ -823,6 +883,52 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
   },
   {
+    name: 'list_category_opt_outs',
+    description:
+      'List category opt-outs: addresses that used a one-click unsubscribe to leave product or newsletter email. Sends in that category to them are refused until the opt-out is removed.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...paginationProps,
+        email: { type: 'string', description: 'Optional filter by email' },
+        category: { type: 'string', enum: ['product', 'newsletter'], description: 'Optional filter by category' },
+        tenant: tenantProp("List this tenant's opt-outs instead of the account-wide ones"),
+        include_tenants: {
+          type: 'boolean',
+          description: "Without tenant: also list every tenant's opt-outs (each entry names its tenant)",
+        },
+      },
+    },
+    outputSchema: pagedOutput('data', categoryOptOutItem, 'Category opt-outs on this page'),
+    annotations: readOnly('List category opt-outs'),
+  },
+  {
+    name: 'remove_category_opt_out',
+    description:
+      'Remove a category opt-out by id or email address so the address receives that category again. Use only when the reader has asked to re-subscribe.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Category opt-out id' },
+        email: { type: 'string', description: 'Email address (alternative to id)' },
+        category: {
+          type: 'string',
+          enum: ['product', 'newsletter'],
+          description: 'Only this category; omit to remove every category for the address',
+        },
+        tenant: tenantProp("Remove from this tenant's opt-outs instead of the account-wide ones"),
+      },
+    },
+    outputSchema: removeCategoryOptOutOutput,
+    annotations: {
+      title: 'Remove category opt-out',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
     name: 'list_templates',
     description: 'List email templates.',
     inputSchema: {
@@ -860,6 +966,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         html: { type: 'string', description: 'HTML body' },
         text: { type: 'string', description: 'Plain-text body' },
         alias: { type: 'string', description: 'Optional short alias to reference the template by instead of its id' },
+        folder: { type: 'string', description: 'Optional folder to file the template in; created if it does not exist' },
       },
       required: ['name', 'subject'],
     },
@@ -1067,7 +1174,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         apply: {
           type: 'string',
           enum: ['cloudflare', 'vercel', 'godaddy'],
-          description: 'Also write the DMARC record through this DNS provider (connected under Settings → Integrations)',
+          description: 'Also write the DMARC record through this DNS provider (connected under Integrations)',
         },
       },
       required: ['domain'],

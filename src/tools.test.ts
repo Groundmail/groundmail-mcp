@@ -25,6 +25,8 @@ function mockClient() {
       list: vi.fn().mockResolvedValue({ data: [], has_more: false, next_cursor: null }),
       create: vi.fn().mockResolvedValue({ suppression: { id: 'sup_1', email: 'a@b.com' } }),
       remove: vi.fn().mockResolvedValue({ ok: true }),
+      listCategoryOptOuts: vi.fn().mockResolvedValue({ data: [], has_more: false, next_cursor: null }),
+      removeCategoryOptOut: vi.fn().mockResolvedValue({ ok: true, deleted: 1 }),
     },
     templates: {
       list: vi.fn().mockResolvedValue({ data: [], has_more: false, next_cursor: null }),
@@ -51,6 +53,29 @@ describe('callMcpTool', () => {
       reply_to: undefined,
     })
     expect(result.content[0]?.text).toContain('msg_1')
+  })
+
+  it('send_email forwards category newsletter and list_emails the stream filter', async () => {
+    const client = mockClient()
+    await callMcpTool(client as never, 'send_email', {
+      from: 'news@example.com',
+      to: 'reader@example.org',
+      subject: 'Issue 1',
+      html: '<p>Hi</p>',
+      category: 'newsletter',
+    })
+    expect(client.emails.send).toHaveBeenCalledWith(expect.objectContaining({ category: 'newsletter' }))
+
+    const bad = await callMcpTool(client as never, 'send_email', {
+      from: 'news@example.com',
+      to: 'reader@example.org',
+      subject: 'Issue 1',
+      category: 'marketing',
+    })
+    expect(bad.isError).toBe(true)
+
+    await callMcpTool(client as never, 'list_emails', { stream: 'newsletter' })
+    expect(client.emails.list).toHaveBeenCalledWith(expect.objectContaining({ stream: 'newsletter' }))
   })
 
   it('send_email omits subject when using a template', async () => {
@@ -194,6 +219,31 @@ describe('callMcpTool', () => {
 
     await callMcpTool(client as never, 'remove_suppression', { email: 'a@b.com' })
     expect(client.suppressions.remove).toHaveBeenCalledWith('a@b.com')
+  })
+
+  it('category opt-out tools call the SDK', async () => {
+    const client = mockClient()
+    await callMcpTool(client as never, 'list_category_opt_outs', { tenant: 'writer_1', category: 'newsletter' })
+    expect(client.suppressions.listCategoryOptOuts).toHaveBeenCalledWith({
+      limit: undefined,
+      cursor: undefined,
+      email: undefined,
+      category: 'newsletter',
+      tenant: 'writer_1',
+    })
+
+    await callMcpTool(client as never, 'remove_category_opt_out', {
+      email: 'reader@example.com',
+      category: 'newsletter',
+      tenant: 'writer_1',
+    })
+    expect(client.suppressions.removeCategoryOptOut).toHaveBeenCalledWith('reader@example.com', {
+      category: 'newsletter',
+      tenant: 'writer_1',
+    })
+
+    const bad = await callMcpTool(client as never, 'remove_category_opt_out', { email: 'a@b.com', category: 'x' })
+    expect(bad.isError).toBe(true)
   })
 
   it('template tools call the SDK', async () => {

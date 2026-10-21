@@ -101,6 +101,7 @@ export const emailItem: Schema = object(
     opened_at: nullableString('First open (ISO 8601); needs open tracking on the sending domain'),
     clicked_at: nullableString('First tracked-link click (ISO 8601); needs click tracking on the sending domain'),
     tenant: nullableString('External id of the tenant the email was sent as. Present only when it was sent as a tenant'),
+    stream: string('Mail stream it went out on: transactional, product or newsletter (each sends from its own IPs)'),
   },
   ['id', 'from', 'to', 'subject', 'status'],
 )
@@ -164,6 +165,28 @@ export const suppressionItem: Schema = object(
   ['id', 'email'],
 )
 
+export const categoryOptOutItem: Schema = object(
+  {
+    id: string('Category opt-out id'),
+    type: string('Always category_opt_out'),
+    email: string('Address that opted out'),
+    category: string('Category the address opted out of: product or newsletter'),
+    tenant: nullableString("External id of the tenant whose email the reader left; null when account-wide"),
+    created_at: string('When the reader opted out (ISO 8601)'),
+    updated_at: string('When the opt-out was last changed (ISO 8601)'),
+  },
+  ['id', 'email', 'category'],
+)
+
+/** Result of removing category opt-outs. */
+export const removeCategoryOptOutOutput: ObjectSchema = object(
+  {
+    ok: boolean('True when the request completed'),
+    deleted: number('How many opt-outs were removed'),
+  },
+  ['ok'],
+)
+
 export const templateItem: Schema = object(
   {
     id: string('Template id (tpl_…)'),
@@ -182,6 +205,7 @@ export const templateItem: Schema = object(
     },
     unsubscribe_enabled: boolean('Whether managed unsubscribe is on for sends using this template'),
     category: string('transactional or product'),
+    folder: nullableString('Folder the template is filed in, or null'),
     published_version_id: nullableString('Id of the version sends currently use'),
     published_at: nullableString('When the template was last published (ISO 8601)'),
     created_at: string('When the template was created (ISO 8601)'),
