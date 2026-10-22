@@ -5,7 +5,7 @@ import { Groundmail } from 'groundmail'
 import { callMcpTool, HTTP_EXCLUDED_TOOL_MESSAGE, HTTP_EXCLUDED_TOOLS, MCP_TOOLS, resolveApiKey, textResult } from './tools.js'
 
 /** Keep in step with package.json `version`. */
-export const MCP_SERVER_VERSION = '0.14.4'
+export const MCP_SERVER_VERSION = '0.14.5'
 
 /** Sent to clients on initialize; agents read it before calling tools. */
 export const MCP_SERVER_INSTRUCTIONS = [
