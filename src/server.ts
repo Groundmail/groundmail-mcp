@@ -2,10 +2,10 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { Groundmail } from 'groundmail'
-import { callMcpTool, MCP_TOOLS, resolveApiKey } from './tools.js'
+import { callMcpTool, HTTP_EXCLUDED_TOOL_MESSAGE, HTTP_EXCLUDED_TOOLS, MCP_TOOLS, resolveApiKey, textResult } from './tools.js'
 
 /** Keep in step with package.json `version`. */
-export const MCP_SERVER_VERSION = '0.5.11'
+export const MCP_SERVER_VERSION = '0.14.4'
 
 /** Sent to clients on initialize; agents read it before calling tools. */
 export const MCP_SERVER_INSTRUCTIONS = [
@@ -16,7 +16,13 @@ export const MCP_SERVER_INSTRUCTIONS = [
   'Errors include a stable code and a link to https://docs.groundmail.dev/errors#<code> that says how to fix them.',
 ].join(' ')
 
-export function createMcpServer(apiKey: string, baseUrl?: string) {
+export type McpServerOptions = {
+  /** Serving over HTTP: leaves out HTTP_EXCLUDED_TOOLS. */
+  http?: boolean
+}
+
+export function createMcpServer(apiKey: string, baseUrl?: string, options: McpServerOptions = {}) {
+  const excluded = options.http ? HTTP_EXCLUDED_TOOLS : new Set<string>()
   const client = new Groundmail(apiKey, baseUrl ? { baseUrl } : {})
   const server = new Server(
     { name: 'groundmail-mcp', title: 'Groundmail', version: MCP_SERVER_VERSION },
@@ -24,7 +30,7 @@ export function createMcpServer(apiKey: string, baseUrl?: string) {
   )
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: MCP_TOOLS.map((tool) => ({
+    tools: MCP_TOOLS.filter((tool) => !excluded.has(tool.name)).map((tool) => ({
       name: tool.name,
       description: tool.description,
       title: tool.annotations.title,
@@ -35,6 +41,7 @@ export function createMcpServer(apiKey: string, baseUrl?: string) {
   }))
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    if (excluded.has(request.params.name)) return textResult(HTTP_EXCLUDED_TOOL_MESSAGE, true)
     const result = await callMcpTool(client, request.params.name, request.params.arguments ?? {})
     return result
   })

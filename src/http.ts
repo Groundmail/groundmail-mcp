@@ -129,7 +129,7 @@ export async function handleHttpRequest(
     return
   }
 
-  const server = createMcpServer(apiKey, options.baseUrl)
+  const server = createMcpServer(apiKey, options.baseUrl, { http: true })
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
   })

@@ -341,8 +341,8 @@ function toolForRequest(method: string, path: string, body: string | undefined):
   throw new Error(`Unexpected request: ${method} ${path}`)
 }
 
-async function connect() {
-  const server = createMcpServer(API_KEY)
+async function connect(options: { http?: boolean } = {}) {
+  const server = createMcpServer(API_KEY, undefined, options)
   const client = new Client({ name: 'test-client', version: '1.0.0' })
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
@@ -377,6 +377,33 @@ function propertiesMissingDescription(schema: unknown, path = ''): string[] {
     return [...(described ? [] : [here]), ...propertiesMissingDescription(value, here)]
   })
 }
+
+describe('over HTTP', () => {
+  it('leaves out tools that take another provider\'s API key', async () => {
+    const { client } = await connect({ http: true })
+    const { tools } = await client.listTools()
+    expect(tools.map((tool) => tool.name)).not.toContain('import_from_provider')
+    expect(tools).toHaveLength(MCP_TOOLS.length - 1)
+  })
+
+  it('refuses a call to a left-out tool and points to the dashboard', async () => {
+    const { client } = await connect({ http: true })
+    const result = await client.callTool({ name: 'import_from_provider', arguments: { provider: 'sendgrid', api_key: 'SG.x' } })
+    expect(result.isError).toBe(true)
+    expect(JSON.stringify(result.content)).toContain('https://app.groundmail.dev/import')
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('asks for no secrets in any tool input', async () => {
+    const { client } = await connect({ http: true })
+    const { tools } = await client.listTools()
+    const secretLike = /(^|_)(api_?key|token|secret|password|credentials?)$/i
+    for (const tool of tools) {
+      const names = Object.keys((tool.inputSchema as { properties?: object }).properties ?? {})
+      expect(names.filter((name) => secretLike.test(name)), tool.name).toEqual([])
+    }
+  })
+})
 
 describe('tool definitions', () => {
   it('lists the tools the server exposes', async () => {

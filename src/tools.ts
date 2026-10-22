@@ -203,14 +203,9 @@ export async function callMcpTool(
             true,
           )
         }
-        const credentials =
-          args.credentials && typeof args.credentials === 'object'
-            ? (args.credentials as Record<string, string>)
-            : undefined
-        const result = await client.domains.apply(domain, {
-          provider: providerRaw,
-          ...(credentials ? { credentials } : {}),
-        })
+        // Only the provider account connected in the dashboard: tool input never carries
+        // registrar or DNS tokens, so they don't pass through the chat.
+        const result = await client.domains.apply(domain, { provider: providerRaw })
         return textResult(result)
       }
       case 'verify_domain': {
@@ -595,6 +590,16 @@ export type McpToolDefinition = {
   annotations: ToolAnnotations
 }
 
+/**
+ * Tools left out over HTTP (the hosted server and `--http`). import_from_provider needs
+ * another provider's API key as input, which over HTTP passes through the chat client;
+ * over stdio it stays on the user's machine. Over HTTP, imports run from the dashboard.
+ */
+export const HTTP_EXCLUDED_TOOLS: ReadonlySet<string> = new Set(['import_from_provider'])
+
+export const HTTP_EXCLUDED_TOOL_MESSAGE =
+  'import_from_provider is not available on the hosted Groundmail MCP server, because it needs your other provider\'s API key. Import from the dashboard at https://app.groundmail.dev/import, or run the local server (npx -y groundmail-mcp) where the key stays on your machine.'
+
 export const MCP_TOOLS: McpToolDefinition[] = [
   {
     name: 'send_email',
@@ -706,7 +711,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   {
     name: 'apply_domain_dns',
     description:
-      'Apply Groundmail DNS records for a domain through Cloudflare, Vercel or GoDaddy. Uses the provider connected in the dashboard (Integrations), or one-time credentials passed on the request.',
+      'Apply Groundmail DNS records for a domain through Cloudflare, Vercel or GoDaddy, using the provider account connected in the dashboard. If none is connected, ask the user to connect it at https://app.groundmail.dev/integrations (never ask for the provider token in chat), or have them publish the records from create_domain by hand.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -715,10 +720,6 @@ export const MCP_TOOLS: McpToolDefinition[] = [
           type: 'string',
           enum: ['cloudflare', 'godaddy', 'vercel'],
           description: 'DNS provider that hosts the domain',
-        },
-        credentials: {
-          type: 'object',
-          description: 'Optional one-time credentials: Cloudflare apiToken (and zoneId), Vercel apiToken (and teamId), or GoDaddy apiKey and apiSecret',
         },
       },
       required: ['domain', 'provider'],
