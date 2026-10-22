@@ -461,7 +461,17 @@ describe('tool definitions', () => {
       }
     }
     const destructive = [...byName].filter(([, hints]) => hints.destructiveHint).map(([name]) => name)
-    expect(destructive.sort()).toEqual(['apply_domain_dns', 'delete_webhook', 'remove_category_opt_out', 'remove_suppression'])
+    expect(destructive.sort()).toEqual([
+      'add_suppression',
+      'apply_domain_dns',
+      'delete_webhook',
+      'enable_dmarc_monitoring',
+      'pause_tenant',
+      'publish_template',
+      'remove_category_opt_out',
+      'remove_suppression',
+      'update_tenant',
+    ])
     for (const name of ['send_email', 'send_test_webhook_event']) {
       expect(byName.get(name), name).toMatchObject({
         readOnlyHint: false,

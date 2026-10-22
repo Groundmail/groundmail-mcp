@@ -858,7 +858,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     annotations: {
       title: 'Add suppression',
       readOnlyHint: false,
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: true,
       openWorldHint: false,
     },
@@ -995,7 +995,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     annotations: {
       title: 'Publish template',
       readOnlyHint: false,
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
     },
@@ -1091,7 +1091,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     annotations: {
       title: 'Update tenant',
       readOnlyHint: false,
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: true,
       openWorldHint: false,
     },
@@ -1112,7 +1112,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     annotations: {
       title: 'Pause tenant',
       readOnlyHint: false,
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: true,
       openWorldHint: false,
     },
@@ -1184,7 +1184,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     annotations: {
       title: 'Enable DMARC monitoring',
       readOnlyHint: false,
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: true,
       openWorldHint: true,
     },
