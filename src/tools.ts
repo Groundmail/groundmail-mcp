@@ -29,6 +29,9 @@ import {
   tenantItem,
   tenantOutput,
   tenantStatsOutput,
+  testEmailItem,
+  testEmailOutput,
+  testInboxOutput,
   testWebhookOutput,
   validateEmailOutput,
   verifyDomainOutput,
@@ -484,6 +487,33 @@ export async function callMcpTool(
           id = data[0].id
         }
         return textResult(await client.migrations.get(id))
+      }
+      case 'get_test_inbox_address': {
+        // The API returns a fresh unique address on every call.
+        return textResult({ test_inbox: await client.testInbox.info() })
+      }
+      case 'list_test_emails': {
+        return textResult(
+          await client.testInbox.list({
+            limit: optNumber(args, 'limit'),
+            cursor: optString(args, 'cursor'),
+            to: optString(args, 'to'),
+            since: optString(args, 'since'),
+          }),
+        )
+      }
+      case 'get_test_email': {
+        const id = optString(args, 'id')
+        if (!id) return textResult('Missing required argument: id', true)
+        return textResult({ email: await client.testInbox.get(id) })
+      }
+      case 'wait_for_test_email': {
+        const to = optString(args, 'to')
+        if (!to) return textResult('Missing required argument: to', true)
+        const seconds = Math.min(60, Math.max(0, optNumber(args, 'timeout') ?? 30))
+        return textResult({
+          email: await client.testInbox.waitFor({ to, timeout: seconds * 1000, since: optString(args, 'since') }),
+        })
       }
       default:
         return textResult(`Unknown tool: ${name}`, true)
@@ -1248,6 +1278,56 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
     outputSchema: migrationOutput,
     annotations: readOnly('Get an import report'),
+  },
+  {
+    name: 'get_test_inbox_address',
+    description:
+      "Get a fresh unique address on the team's test domain (<team>.test.groundmail.dev), plus this month's test email usage. Mail sent to it from any email provider (SendGrid, SES, Groundmail or anything else) is caught in the test inbox and never delivered. Use a new address per test, have the app send to it, then call wait_for_test_email.",
+    inputSchema: { type: 'object', properties: {} },
+    outputSchema: testInboxOutput,
+    annotations: readOnly('Get a test inbox address'),
+  },
+  {
+    name: 'list_test_emails',
+    description:
+      'List emails caught in the test inbox (and emails sent with a gm_test_ key), newest first, with the extracted one-time code and links. Kept 14 days.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...paginationProps,
+        to: { type: 'string', description: 'Only emails to this exact address' },
+        since: { type: 'string', description: 'Only emails received at or after this time (ISO 8601)' },
+      },
+    },
+    outputSchema: pagedOutput('emails', testEmailItem, 'Caught test emails, newest first'),
+    annotations: readOnly('List test emails'),
+  },
+  {
+    name: 'get_test_email',
+    description: 'Get one caught test email with its text and HTML bodies, headers, source, code and links.',
+    inputSchema: {
+      type: 'object',
+      properties: { id: { type: 'string', description: 'Test email id (tie_…)' } },
+      required: ['id'],
+    },
+    outputSchema: testEmailOutput,
+    annotations: readOnly('Get test email'),
+  },
+  {
+    name: 'wait_for_test_email',
+    description:
+      'Wait for an email to a test inbox address and return it, with the one-time code and links extracted. An email that already arrived is returned at once. Waits up to timeout seconds (default 30, at most 60); on timeout, check that the app sent to the exact address and call again.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        to: { type: 'string', description: 'The exact test address the app sent to' },
+        timeout: { type: 'number', description: 'Seconds to wait, at most 60 (default 30)' },
+        since: { type: 'string', description: 'Only emails received at or after this time (ISO 8601)' },
+      },
+      required: ['to'],
+    },
+    outputSchema: testEmailOutput,
+    annotations: readOnly('Wait for a test email'),
   },
 ]
 

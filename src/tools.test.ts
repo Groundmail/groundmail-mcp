@@ -181,6 +181,32 @@ describe('callMcpTool', () => {
     expect(result.isError).toBeUndefined()
   })
 
+  it('test inbox tools call the SDK', async () => {
+    const client = {
+      testInbox: {
+        info: vi.fn().mockResolvedValue({ domain: 'acme.test.groundmail.dev', address: 'run-x@acme.test.groundmail.dev' }),
+        list: vi.fn().mockResolvedValue({ emails: [], has_more: false, next_cursor: null }),
+        get: vi.fn().mockResolvedValue({ id: 'tie_1', code: '123456' }),
+        waitFor: vi.fn().mockResolvedValue({ id: 'tie_1', code: '123456' }),
+      },
+    }
+    const address = await callMcpTool(client as never, 'get_test_inbox_address', {})
+    expect(address.structuredContent).toEqual({
+      test_inbox: { domain: 'acme.test.groundmail.dev', address: 'run-x@acme.test.groundmail.dev' },
+    })
+
+    await callMcpTool(client as never, 'list_test_emails', { to: 'a@acme.test.groundmail.dev' })
+    expect(client.testInbox.list).toHaveBeenCalledWith(expect.objectContaining({ to: 'a@acme.test.groundmail.dev' }))
+
+    const got = await callMcpTool(client as never, 'get_test_email', { id: 'tie_1' })
+    expect(got.structuredContent).toEqual({ email: { id: 'tie_1', code: '123456' } })
+
+    await callMcpTool(client as never, 'wait_for_test_email', { to: 'a@acme.test.groundmail.dev', timeout: 120 })
+    expect(client.testInbox.waitFor).toHaveBeenCalledWith({ to: 'a@acme.test.groundmail.dev', timeout: 60_000, since: undefined })
+
+    expect((await callMcpTool(client as never, 'wait_for_test_email', {})).isError).toBe(true)
+  })
+
   it('webhook tools call the SDK', async () => {
     const client = mockClient()
     await callMcpTool(client as never, 'list_webhooks', {})

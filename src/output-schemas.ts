@@ -529,3 +529,59 @@ export const tenantStatsOutput: ObjectSchema = object(
   },
   ['tenant', 'stats'],
 )
+
+export const testInboxOutput: ObjectSchema = object(
+  {
+    test_inbox: described(
+      object(
+        {
+          object: string('Always test_inbox'),
+          domain: string('The team\'s test domain. Mail to any address at it is caught and never delivered'),
+          address: string('A fresh unique address on the test domain. Use a new one for each test'),
+          addon: anyObject('Email testing add-on: active (boolean) and status'),
+          usage: anyObject('This month: received, rejected, included (100 free, 5,000 with the add-on), overage, resets_at'),
+          retention_days: number('Days caught emails are kept'),
+        },
+        ['domain', 'address'],
+      ),
+      'The team\'s test inbox',
+    ),
+  },
+  ['test_inbox'],
+)
+
+const testEmailFields: Record<string, Schema> = {
+  object: string('Always test_inbox_email'),
+  id: string('Test email id (tie_…)'),
+  source: string('inbound (received at the test domain, from any provider) or test_key (sent with a gm_test_ key)'),
+  email_id: nullableString('With test_key: the sent email id (msg_…)'),
+  from: string('Sender'),
+  to: stringArray('Recipients'),
+  cc: stringArray('Cc addresses'),
+  subject: string('Subject line'),
+  code: nullableString('The one-time code found in the email (4 to 8 digits), or null'),
+  links: stringArray('http(s) links in the email, in order'),
+  received_at: string('When it arrived (ISO 8601)'),
+  expires_at: string('When it is deleted (ISO 8601)'),
+}
+
+export const testEmailItem: Schema = object(testEmailFields, ['id', 'subject'])
+
+export const testEmailOutput: ObjectSchema = object(
+  {
+    email: described(
+      object(
+        {
+          ...testEmailFields,
+          text_body: nullableString('Plain-text body'),
+          html_body: nullableString('HTML body'),
+          headers: arrayOf(anyObject('A header: name and value'), 'Message headers in order'),
+          raw_source: nullableString('Raw message source, when available'),
+        },
+        ['id', 'subject'],
+      ),
+      'The test email',
+    ),
+  },
+  ['email'],
+)

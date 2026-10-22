@@ -277,6 +277,35 @@ API_RESPONSES.enable_dmarc_monitoring = {
 }
 
 API_RESPONSES.get_import_report = API_RESPONSES.import_from_provider
+API_RESPONSES.get_test_inbox_address = {
+  test_inbox: {
+    object: 'test_inbox',
+    domain: 'acme.test.groundmail.dev',
+    address: 'run-k3m9x2pq@acme.test.groundmail.dev',
+    addon: { active: false, status: null },
+    usage: { month: '2026-10', received: 3, rejected: 0, included: 100, overage: false, resets_at: NOW },
+    retention_days: 14,
+  },
+}
+const testEmail = {
+  object: 'test_inbox_email',
+  id: 'tie_1',
+  source: 'inbound',
+  email_id: null,
+  from: 'no-reply@acme.com',
+  to: ['signup-x@acme.test.groundmail.dev'],
+  cc: [],
+  subject: 'Your code',
+  code: '482913',
+  links: ['https://acme.com/verify'],
+  received_at: NOW,
+  expires_at: NOW,
+}
+API_RESPONSES.list_test_emails = { emails: [testEmail], ...page }
+API_RESPONSES.get_test_email = {
+  email: { ...testEmail, text_body: 'Your code is 482913', html_body: null, headers: [{ name: 'Subject', value: 'Your code' }], raw_source: null },
+}
+API_RESPONSES.wait_for_test_email = API_RESPONSES.get_test_email
 
 const TOOL_ARGS: Record<string, Record<string, unknown>> = {
   send_email: { from: 'noreply@example.com', to: 'ada@example.com', subject: 'Hi', text: 'Hi' },
@@ -304,6 +333,8 @@ const TOOL_ARGS: Record<string, Record<string, unknown>> = {
   get_tenant_stats: { tenant: 'acme', days: 7 },
   get_dmarc_report: { domain: 'example.com' },
   enable_dmarc_monitoring: { domain: 'example.com' },
+  get_test_email: { id: 'tie_1' },
+  wait_for_test_email: { to: 'signup-x@acme.test.groundmail.dev', timeout: 5 },
 }
 
 /** Which tool a request belongs to, by method and path. */
@@ -319,6 +350,10 @@ function toolForRequest(method: string, path: string, body: string | undefined):
   }
   if (path.startsWith('/tenants')) return method === 'POST' ? 'create_tenant' : 'list_tenants'
   if (path.startsWith('/migrations')) return method === 'POST' ? 'import_from_provider' : 'get_import_report'
+  if (path.startsWith('/test-inbox/wait')) return 'wait_for_test_email'
+  if (path.startsWith('/test-inbox/emails/')) return 'get_test_email'
+  if (path.startsWith('/test-inbox/emails')) return 'list_test_emails'
+  if (path.startsWith('/test-inbox')) return 'get_test_inbox_address'
   if (path.startsWith('/emails/test')) return 'send_test_webhook_event'
   if (path.startsWith('/emails/')) return 'get_email'
   if (path.startsWith('/emails')) return method === 'POST' ? 'send_email' : 'list_emails'
@@ -410,7 +445,7 @@ describe('tool definitions', () => {
     const { client } = await connect()
     const { tools } = await client.listTools()
     expect(tools.map((tool) => tool.name).sort()).toEqual(MCP_TOOLS.map((tool) => tool.name).sort())
-    expect(tools).toHaveLength(33)
+    expect(tools).toHaveLength(37)
   })
 
   it('gives every tool a description, a title and complete annotations', async () => {
@@ -454,7 +489,7 @@ describe('tool definitions', () => {
   it('marks read tools read-only and destructive tools destructive', () => {
     const byName = new Map(MCP_TOOLS.map((tool) => [tool.name, tool.annotations]))
     for (const [name, hints] of byName) {
-      if (/^(list|get|validate)_/.test(name)) {
+      if (/^(list|get|validate|wait_for)_/.test(name)) {
         expect(hints, name).toMatchObject({ readOnlyHint: true, destructiveHint: false, idempotentHint: true })
       } else {
         expect(hints.readOnlyHint, name).toBe(false)

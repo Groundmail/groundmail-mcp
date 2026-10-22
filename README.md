@@ -55,7 +55,7 @@ When you connect, you choose the access: **Full**, **Send only** or **Read only*
 >
 > "How is my deliverability over the last 7 days?"
 
-Tools cover emails (send, list, look up), domains (add, apply DNS through Cloudflare, Vercel or GoDaddy, verify), templates, webhooks, suppressions, address validation, deliverability, DMARC monitoring, imports from other providers and tenants (one per customer you send for: create, update, pause, resume, stats; `tenant` on sends, domains and suppressions). Each tool carries read-only and destructive annotations and an output schema. Full list: [docs.groundmail.dev/ai/mcp](https://docs.groundmail.dev/ai/mcp).
+Tools cover emails (send, list, look up), domains (add, apply DNS through Cloudflare, Vercel or GoDaddy, verify), templates, webhooks, suppressions, address validation, deliverability, DMARC monitoring, email testing (a test address per run, then wait for the email and read its code and links), imports from other providers and tenants (one per customer you send for: create, update, pause, resume, stats; `tenant` on sends, domains and suppressions). Each tool carries read-only and destructive annotations and an output schema. Full list: [docs.groundmail.dev/ai/mcp](https://docs.groundmail.dev/ai/mcp).
 
 ## Transports
 
