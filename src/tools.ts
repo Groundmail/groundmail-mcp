@@ -1063,7 +1063,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   {
     name: 'list_tenants',
     description:
-      'List tenants: one per customer you send email for, each with its own domains, suppression list, stats, pause switch and daily limit. Tenants are included on the Scale and Dedicated plans.',
+      'List tenants: one per customer you send email for, each with its own domains, suppression list, stats, pause switch and daily limit. Tenants are included on pay as you go and the Dedicated plan.',
     inputSchema: {
       type: 'object',
       properties: {
