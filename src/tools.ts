@@ -1,5 +1,6 @@
 import type {
   CreateMigrationParams,
+  DnsProviderName,
   EmailWebhookEventType,
   Groundmail,
   MigrationResource,
@@ -38,6 +39,8 @@ import {
   webhookItem,
   type ObjectSchema,
 } from './output-schemas.js'
+
+const DNS_PROVIDERS: DnsProviderName[] = ['cloudflare', 'godaddy', 'vercel', 'netlify', 'digitalocean', 'dnsimple']
 
 export type McpToolResult = {
   content: Array<{ type: 'text'; text: string }>
@@ -200,15 +203,12 @@ export async function callMcpTool(
         }
         const providerRaw =
           typeof args.provider === 'string' ? args.provider.trim().toLowerCase() : ''
-        if (providerRaw !== 'cloudflare' && providerRaw !== 'godaddy' && providerRaw !== 'vercel') {
-          return textResult(
-            'Missing or invalid provider. Use provider "cloudflare", "godaddy", or "vercel".',
-            true,
-          )
+        if (!DNS_PROVIDERS.includes(providerRaw as DnsProviderName)) {
+          return textResult(`Missing or invalid provider. Use one of: ${DNS_PROVIDERS.join(', ')}.`, true)
         }
         // Only the provider account connected in the dashboard: tool input never carries
         // registrar or DNS tokens, so they don't pass through the chat.
-        const result = await client.domains.apply(domain, { provider: providerRaw })
+        const result = await client.domains.apply(domain, { provider: providerRaw as DnsProviderName })
         return textResult(result)
       }
       case 'verify_domain': {
@@ -448,10 +448,10 @@ export async function callMcpTool(
         const domain = optString(args, 'domain')
         if (!domain) return textResult('Missing required argument: domain', true)
         const apply = optString(args, 'apply')
-        if (apply && apply !== 'cloudflare' && apply !== 'vercel' && apply !== 'godaddy') {
-          return textResult('apply must be cloudflare, vercel or godaddy', true)
+        if (apply && !DNS_PROVIDERS.includes(apply as DnsProviderName)) {
+          return textResult(`apply must be one of: ${DNS_PROVIDERS.join(', ')}`, true)
         }
-        return textResult(await client.dmarc.enable(domain, apply ? { apply: apply as 'cloudflare' | 'vercel' | 'godaddy' } : {}))
+        return textResult(await client.dmarc.enable(domain, apply ? { apply: apply as DnsProviderName } : {}))
       }
       case 'get_deliverability': {
         const window = args.window === '7d' ? '7d' : '30d'
@@ -741,14 +741,14 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   {
     name: 'apply_domain_dns',
     description:
-      'Apply Groundmail DNS records for a domain through Cloudflare, Vercel or GoDaddy, using the provider account connected in the dashboard. If none is connected, ask the user to connect it at https://app.groundmail.dev/integrations (never ask for the provider token in chat), or have them publish the records from create_domain by hand.',
+      'Apply Groundmail DNS records for a domain through Cloudflare, Vercel, GoDaddy, Netlify, DigitalOcean or DNSimple, using the provider account connected in the dashboard. If none is connected, ask the user to connect it at https://app.groundmail.dev/integrations (never ask for the provider token in chat), or have them publish the records from create_domain by hand.',
     inputSchema: {
       type: 'object',
       properties: {
         domain: { type: 'string', description: 'Domain name or id of a domain already added to this account (example.com)' },
         provider: {
           type: 'string',
-          enum: ['cloudflare', 'godaddy', 'vercel'],
+          enum: [...DNS_PROVIDERS],
           description: 'DNS provider that hosts the domain',
         },
       },
@@ -1204,7 +1204,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         domain: { type: 'string', description: 'Domain name or id (example.com)' },
         apply: {
           type: 'string',
-          enum: ['cloudflare', 'vercel', 'godaddy'],
+          enum: [...DNS_PROVIDERS],
           description: 'Also write the DMARC record through this DNS provider (connected under Integrations)',
         },
       },
