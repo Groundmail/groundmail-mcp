@@ -376,7 +376,7 @@ function toolForRequest(method: string, path: string, body: string | undefined):
   throw new Error(`Unexpected request: ${method} ${path}`)
 }
 
-async function connect(options: { http?: boolean } = {}) {
+async function connect(options: { http?: boolean; agent?: string | null } = {}) {
   const server = createMcpServer(API_KEY, undefined, options)
   const client = new Client({ name: 'test-client', version: '1.0.0' })
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
@@ -412,6 +412,25 @@ function propertiesMissingDescription(schema: unknown, path = ''): string[] {
     return [...(described ? [] : [here]), ...propertiesMissingDescription(value, here)]
   })
 }
+
+describe('client identity', () => {
+  it('tells the API it is the MCP server, which agent called it and which tool', async () => {
+    const { client } = await connect()
+    await client.callTool({ name: 'list_domains', arguments: {} })
+    const init = vi.mocked(fetch).mock.calls.at(-1)?.[1] as RequestInit
+    const headers = new Headers(init.headers)
+    expect(headers.get('user-agent')).toMatch(/^groundmail-mcp\/\S+ \(agent test-client\) node\//)
+    expect(headers.get('x-groundmail-mcp-tool')).toBe('list_domains')
+    expect(headers.get('authorization')).toBe(`Bearer ${API_KEY}`)
+  })
+
+  it('takes the agent from the HTTP caller when given', async () => {
+    const { client } = await connect({ http: true, agent: 'Claude-User/1.0' })
+    await client.callTool({ name: 'list_domains', arguments: {} })
+    const init = vi.mocked(fetch).mock.calls.at(-1)?.[1] as RequestInit
+    expect(new Headers(init.headers).get('user-agent')).toContain('(agent Claude-User)')
+  })
+})
 
 describe('over HTTP', () => {
   it('leaves out tools that take another provider\'s API key', async () => {

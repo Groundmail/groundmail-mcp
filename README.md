@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://groundmail.dev">
+  <a href="https://groundmail.dev?utm_source=github&utm_medium=readme&utm_campaign=groundmail-mcp">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="https://app.groundmail.dev/images/github/readme-logo-dark.png">
       <img alt="Groundmail" src="https://app.groundmail.dev/images/github/readme-logo-light.png" height="44">
@@ -21,9 +21,9 @@
 </p>
 
 <p align="center">
-  <a href="https://docs.groundmail.dev/ai/mcp">Docs</a> ·
-  <a href="https://app.groundmail.dev/signup">Get a free account</a> ·
-  <a href="https://groundmail.dev">groundmail.dev</a>
+  <a href="https://docs.groundmail.dev/ai/mcp?utm_source=github&utm_medium=readme&utm_campaign=groundmail-mcp">Docs</a> ·
+  <a href="https://app.groundmail.dev/signup?utm_source=github&utm_medium=readme&utm_campaign=groundmail-mcp">Get a free account</a> ·
+  <a href="https://groundmail.dev?utm_source=github&utm_medium=readme&utm_campaign=groundmail-mcp">groundmail.dev</a>
 </p>
 
 ---
@@ -55,7 +55,7 @@ When you connect, you choose the access: **Full**, **Send only** or **Read only*
 >
 > "How is my deliverability over the last 7 days?"
 
-Tools cover emails (send, list, look up), domains (add, apply DNS through Cloudflare, Vercel, GoDaddy, Netlify, DigitalOcean or DNSimple, verify), templates, webhooks, suppressions, address validation, deliverability, DMARC monitoring, email testing (a test address per run, then wait for the email and read its code and links), imports from other providers and tenants (one per customer you send for: create, update, pause, resume, stats; `tenant` on sends, domains and suppressions). Each tool carries read-only and destructive annotations and an output schema. Full list: [docs.groundmail.dev/ai/mcp](https://docs.groundmail.dev/ai/mcp).
+Tools cover emails (send, list, look up), domains (add, apply DNS through Cloudflare, Vercel or GoDaddy, verify), templates, webhooks, suppressions, address validation, deliverability, DMARC monitoring, email testing (a test address per run, then wait for the email and read its code and links), imports from other providers and tenants (one per customer you send for: create, update, pause, resume, stats; `tenant` on sends, domains and suppressions). Each tool carries read-only and destructive annotations and an output schema. Full list: [docs.groundmail.dev/ai/mcp](https://docs.groundmail.dev/ai/mcp?utm_source=github&utm_medium=readme&utm_campaign=groundmail-mcp).
 
 ## Transports
 
@@ -135,7 +135,7 @@ Want your coding agent to know Groundmail too? Install the [agent skills](https:
 
 - **Our own mail servers and IP space.** Your password resets and receipts don't share a pool with bulk marketing senders.
 - **Transactional email only.** No newsletters or cold outreach on the platform, which keeps the sending reputation clean.
-- **Start free.** Free covers 3,000 emails a month. After that it's pay as you go: $0.70 per 1,000, less as you grow. [Pricing](https://groundmail.dev/pricing/)
+- **Start free.** Free covers 3,000 emails a month. After that it's pay as you go: $0.70 per 1,000, less as you grow. [Pricing](https://groundmail.dev/pricing/?utm_source=github&utm_medium=readme&utm_campaign=groundmail-mcp)
 - **Built for code and for agents.** REST API, SMTP, SDKs for Node, Python, Go, PHP and Ruby, a CLI, and an MCP server for Claude, ChatGPT and Cursor.
 
 ## All Groundmail libraries
@@ -158,4 +158,4 @@ Want your coding agent to know Groundmail too? Install the [agent skills](https:
 | Agent skills and Claude Code plugin | [Groundmail/groundmail-skills](https://github.com/Groundmail/groundmail-skills) |
 | Email templates (React Email, MJML, HTML) | [Groundmail/email-templates](https://github.com/Groundmail/email-templates) |
 
-[Website](https://groundmail.dev) · [Docs](https://docs.groundmail.dev) · [Pricing](https://groundmail.dev/pricing/) · [Sign up free](https://app.groundmail.dev/signup)
+[Website](https://groundmail.dev?utm_source=github&utm_medium=readme&utm_campaign=groundmail-mcp) · [Docs](https://docs.groundmail.dev?utm_source=github&utm_medium=readme&utm_campaign=groundmail-mcp) · [Pricing](https://groundmail.dev/pricing/?utm_source=github&utm_medium=readme&utm_campaign=groundmail-mcp) · [Sign up free](https://app.groundmail.dev/signup?utm_source=github&utm_medium=readme&utm_campaign=groundmail-mcp)

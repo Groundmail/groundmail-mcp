@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
@@ -5,7 +6,7 @@ import { Groundmail } from 'groundmail'
 import { callMcpTool, HTTP_EXCLUDED_TOOL_MESSAGE, HTTP_EXCLUDED_TOOLS, MCP_TOOLS, resolveApiKey, textResult } from './tools.js'
 
 /** Keep in step with package.json `version`. */
-export const MCP_SERVER_VERSION = '0.15.1'
+export const MCP_SERVER_VERSION = '0.16.2'
 
 /** Sent to clients on initialize; agents read it before calling tools. */
 export const MCP_SERVER_INSTRUCTIONS = [
@@ -19,12 +20,42 @@ export const MCP_SERVER_INSTRUCTIONS = [
 export type McpServerOptions = {
   /** Serving over HTTP: leaves out HTTP_EXCLUDED_TOOLS. */
   http?: boolean
+  /** The MCP host calling us (over HTTP, from its User-Agent); stdio reads it from initialize. */
+  agent?: string | null
+}
+
+/** The tool whose API calls are in flight, for the `X-Groundmail-Mcp-Tool` header. */
+const currentTool = new AsyncLocalStorage<string>()
+
+/** A short token for the MCP host's name ("claude-ai", "cursor"…), or null. */
+export function agentToken(name: string | null | undefined): string | null {
+  const token = name?.trim().split(/[\s/]/)[0]?.replace(/[^\w.-]/g, '').slice(0, 60)
+  return token || null
+}
+
+/** `groundmail-mcp/<version> (agent <name>)`: lets Groundmail count MCP use by agent. */
+export function mcpUserAgent(agent: string | null | undefined): string {
+  const token = agentToken(agent)
+  return `groundmail-mcp/${MCP_SERVER_VERSION}${token ? ` (agent ${token})` : ''} node/${process.versions.node}`
+}
+
+/** fetch for the SDK: our User-Agent, and the tool being called. */
+function mcpFetch(getAgent: () => string | null): typeof fetch {
+  return (input, init) => {
+    const headers = new Headers(init?.headers)
+    headers.set('User-Agent', mcpUserAgent(getAgent()))
+    const tool = currentTool.getStore()
+    if (tool) headers.set('X-Groundmail-Mcp-Tool', tool)
+    return fetch(input, { ...init, headers })
+  }
 }
 
 export function createMcpServer(apiKey: string, baseUrl?: string, options: McpServerOptions = {}) {
   const excluded = options.http ? HTTP_EXCLUDED_TOOLS : new Set<string>()
-  const client = new Groundmail(apiKey, baseUrl ? { baseUrl } : {})
-  const server = new Server(
+  let server: Server | null = null
+  const fetchImpl = mcpFetch(() => options.agent ?? server?.getClientVersion()?.name ?? null)
+  const client = new Groundmail(apiKey, baseUrl ? { baseUrl, fetch: fetchImpl } : { fetch: fetchImpl })
+  server = new Server(
     { name: 'groundmail-mcp', title: 'Groundmail', version: MCP_SERVER_VERSION },
     { capabilities: { tools: {} }, instructions: MCP_SERVER_INSTRUCTIONS },
   )
@@ -42,8 +73,9 @@ export function createMcpServer(apiKey: string, baseUrl?: string, options: McpSe
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (excluded.has(request.params.name)) return textResult(HTTP_EXCLUDED_TOOL_MESSAGE, true)
-    const result = await callMcpTool(client, request.params.name, request.params.arguments ?? {})
-    return result
+    return currentTool.run(request.params.name, () =>
+      callMcpTool(client, request.params.name, request.params.arguments ?? {}),
+    )
   })
 
   return server

@@ -129,7 +129,10 @@ export async function handleHttpRequest(
     return
   }
 
-  const server = createMcpServer(apiKey, options.baseUrl, { http: true })
+  const server = createMcpServer(apiKey, options.baseUrl, {
+    http: true,
+    agent: typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : null,
+  })
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
   })
