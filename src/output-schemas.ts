@@ -133,6 +133,9 @@ export const dnsRecordItem: Schema = object(
     value: string('Record value'),
     purpose: string('What the record is for, for example SPF or DKIM'),
     priority: number('MX preference, present on MX records'),
+    already_set: boolean(
+      'True when the domain already publishes a record that does this job (its own DMARC record). The value is what is there now: nothing to add or change, never publish a second one',
+    ),
   },
   ['type', 'host', 'value'],
 )
@@ -289,7 +292,7 @@ export const verifyDomainOutput: ObjectSchema = object(
     checks: described(
       object({
         ownership: boolean('Ownership record found'),
-        spf: boolean('SPF record found'),
+        spf: boolean('SPF in place. Always true for a main domain (example.com), which needs no SPF change'),
         dkim: boolean('DKIM record found'),
         dmarc: boolean('DMARC record found'),
       }),

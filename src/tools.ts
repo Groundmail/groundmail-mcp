@@ -749,11 +749,12 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   },
   {
     name: 'create_domain',
-    description: 'Add a sending domain. DNS must still be applied and verified before production sends.',
+    description:
+      "Add a sending domain. Suggest a subdomain of the company's domain (mail.example.com): the app's email then keeps its own reputation and the team's mailboxes and DNS stay as they are. DNS must still be applied and verified before production sends. Records with already_set are already in place: leave them alone.",
     inputSchema: {
       type: 'object',
       properties: {
-        name: { type: 'string', description: 'Domain name (example.com)' },
+        name: { type: 'string', description: 'Domain name, ideally a subdomain (mail.example.com)' },
         inbound_enabled: { type: 'boolean', description: 'Enable inbound receiving on this domain' },
         tenant: tenantProp('Give the domain to this tenant; only that tenant can then send from it'),
       },
