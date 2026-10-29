@@ -585,3 +585,43 @@ export const testEmailOutput: ObjectSchema = object(
   },
   ['email'],
 )
+
+const inReplyToEmailItem: Schema = {
+  ...object(
+    {
+      id: string('The sent email id (msg_…)'),
+      subject: string('Its subject line'),
+      from: string('Its sender'),
+      to: stringArray('Its recipients'),
+      sent_at: string('When it was sent (ISO 8601)'),
+      tags: arrayOf(
+        object({ name: string('Tag name'), value: string('Tag value') }, ['name', 'value']),
+        'Its tags as sent',
+      ),
+      tenant: nullableString('External id of the tenant it was sent as; null when it was not sent as a tenant'),
+    },
+    ['id'],
+  ),
+  type: ['object', 'null'],
+  description:
+    'The email you sent through Groundmail that this one replies to, as it was when the reply arrived; null when it replies to none of your sent emails',
+}
+
+export const receivedEmailItem: Schema = object(
+  {
+    id: string('Received email id (inb_…)'),
+    domain_name: string('The receiving domain'),
+    rcpt_to: string('The address it was delivered to'),
+    from: string('Sender'),
+    to: stringArray('To addresses'),
+    cc: stringArray('Cc addresses'),
+    subject: string('Subject line'),
+    spam_status: nullableString('Content scanning verdict: clean, suspicious or spam; null when not scanned'),
+    message_id: nullableString('Its Message-ID header'),
+    in_reply_to: nullableString('Its In-Reply-To header'),
+    in_reply_to_email: inReplyToEmailItem,
+    attachment_count: number('Number of attachments'),
+    received_at: string('When it arrived (ISO 8601)'),
+  },
+  ['id', 'from', 'subject'],
+)

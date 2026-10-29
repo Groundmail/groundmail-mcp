@@ -32,10 +32,31 @@ function mockClient() {
       list: vi.fn().mockResolvedValue({ data: [], has_more: false, next_cursor: null }),
       get: vi.fn().mockResolvedValue({ template: { id: 'tpl_1', alias: 'welcome' } }),
     },
+    receivedEmails: {
+      list: vi.fn().mockResolvedValue({ received_emails: [], has_more: false, next_cursor: null }),
+    },
   }
 }
 
 describe('callMcpTool', () => {
+  it('list_received_emails passes the domain and in_reply_to_email filters to the SDK', async () => {
+    const client = mockClient()
+    await callMcpTool(client as never, 'list_received_emails', {
+      domain: 'reply.example.com',
+      in_reply_to_email: 'msg_1',
+      limit: 10,
+    })
+    expect(client.receivedEmails.list).toHaveBeenCalledWith({
+      limit: 10,
+      cursor: undefined,
+      domain: 'reply.example.com',
+      inReplyToEmail: 'msg_1',
+    })
+
+    await callMcpTool(client as never, 'list_received_emails', {})
+    expect(client.receivedEmails.list).toHaveBeenLastCalledWith({ limit: undefined, cursor: undefined, domain: undefined })
+  })
+
   it('send_email calls the SDK', async () => {
     const client = mockClient()
     const result = await callMcpTool(client as never, 'send_email', {

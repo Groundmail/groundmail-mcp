@@ -306,6 +306,46 @@ API_RESPONSES.get_test_email = {
   email: { ...testEmail, text_body: 'Your code is 482913', html_body: null, headers: [{ name: 'Subject', value: 'Your code' }], raw_source: null },
 }
 API_RESPONSES.wait_for_test_email = API_RESPONSES.get_test_email
+API_RESPONSES.list_received_emails = {
+  received_emails: [
+    {
+      id: 'inb_1',
+      domain_id: 'dom_1',
+      domain_name: 'reply.example.com',
+      status: 'received',
+      rcpt_to: 'billing@reply.example.com',
+      mail_from: 'maya@example.org',
+      from: 'maya@example.org',
+      to: ['billing@reply.example.com'],
+      cc: [],
+      subject: 'Re: Your receipt',
+      spam_status: 'clean',
+      spam_score: 0.4,
+      bounced: false,
+      received_with_ssl: true,
+      message_id: '<r1@example.org>',
+      in_reply_to: '<m1@example.com>',
+      references: ['<m1@example.com>'],
+      in_reply_to_email: {
+        id: 'msg_1',
+        subject: 'Your receipt',
+        from: 'billing@example.com',
+        to: ['maya@example.org'],
+        sent_at: NOW,
+        tags: [{ name: 'type', value: 'receipt' }],
+        tenant: null,
+      },
+      attachment_count: 0,
+      attachments: [],
+      text_body: null,
+      html_body: null,
+      auto_submitted: null,
+      received_at: NOW,
+      created_at: NOW,
+    },
+  ],
+  ...page,
+}
 
 const TOOL_ARGS: Record<string, Record<string, unknown>> = {
   send_email: { from: 'noreply@example.com', to: 'ada@example.com', subject: 'Hi', text: 'Hi' },
@@ -354,6 +394,7 @@ function toolForRequest(method: string, path: string, body: string | undefined):
   if (path.startsWith('/test-inbox/emails/')) return 'get_test_email'
   if (path.startsWith('/test-inbox/emails')) return 'list_test_emails'
   if (path.startsWith('/test-inbox')) return 'get_test_inbox_address'
+  if (path.startsWith('/received-emails')) return 'list_received_emails'
   if (path.startsWith('/emails/test')) return 'send_test_webhook_event'
   if (path.startsWith('/emails/')) return 'get_email'
   if (path.startsWith('/emails')) return method === 'POST' ? 'send_email' : 'list_emails'
@@ -464,7 +505,7 @@ describe('tool definitions', () => {
     const { client } = await connect()
     const { tools } = await client.listTools()
     expect(tools.map((tool) => tool.name).sort()).toEqual(MCP_TOOLS.map((tool) => tool.name).sort())
-    expect(tools).toHaveLength(37)
+    expect(tools).toHaveLength(38)
   })
 
   it('gives every tool a description, a title and complete annotations', async () => {

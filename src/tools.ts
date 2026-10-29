@@ -22,6 +22,7 @@ import {
   migrationOutput,
   okOutput,
   pagedOutput,
+  receivedEmailItem,
   sendEmailOutput,
   suppressionItem,
   suppressionOutput,
@@ -195,6 +196,17 @@ export async function callMcpTool(
         const id = optString(args, 'id')
         if (!id) return textResult('Missing required argument: id', true)
         return textResult(await client.emails.get(id))
+      }
+      case 'list_received_emails': {
+        const inReplyToEmail = optString(args, 'in_reply_to_email')
+        return textResult(
+          await client.receivedEmails.list({
+            limit: optNumber(args, 'limit'),
+            cursor: optString(args, 'cursor'),
+            domain: optString(args, 'domain'),
+            ...(inReplyToEmail ? { inReplyToEmail } : {}),
+          }),
+        )
       }
       case 'apply_domain_dns': {
         const domain = String(args.domain ?? '').trim()
@@ -706,6 +718,24 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
     outputSchema: getEmailOutput,
     annotations: readOnly('Get email'),
+  },
+  {
+    name: 'list_received_emails',
+    description:
+      'List emails received on domains with inbound enabled, newest first (bodies left out). A reply to an email you sent through Groundmail has in_reply_to_email: the sent email it answers. Pass in_reply_to_email: msg_… to list the replies to one sent email.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...paginationProps,
+        domain: { type: 'string', description: 'Only messages received on this domain' },
+        in_reply_to_email: {
+          type: 'string',
+          description: 'Only replies to this sent email (msg_…)',
+        },
+      },
+    },
+    outputSchema: pagedOutput('received_emails', receivedEmailItem, 'Received emails on this page, newest first'),
+    annotations: readOnly('List received emails'),
   },
   {
     name: 'list_domains',
