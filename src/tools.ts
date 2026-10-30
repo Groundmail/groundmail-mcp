@@ -599,6 +599,7 @@ export function formatToolError(error: unknown): string {
   if (hint) lines.push(`hint: ${hint}`)
   const docsUrl = text(err.docsUrl) ?? (code ? `https://docs.groundmail.dev/errors#${code}` : null)
   if (docsUrl) lines.push(`how to fix: ${docsUrl}`)
+  if (upgradeUrl || /billing|payment method/i.test(hint ?? '')) lines.push(BILLING_IN_DASHBOARD_NOTE)
   return lines.join('\n')
 }
 
@@ -664,6 +665,10 @@ export type McpToolDefinition = {
  */
 export const HTTP_EXCLUDED_TOOLS: ReadonlySet<string> = new Set(['import_from_provider'])
 
+/** Appended to billing errors so the assistant never collects card details in chat. */
+export const BILLING_IN_DASHBOARD_NOTE =
+  'note: the user sets up billing themselves in the Groundmail dashboard. Do not ask for or accept card numbers or other payment details in chat.'
+
 export const HTTP_EXCLUDED_TOOL_MESSAGE =
   'import_from_provider is not available on the hosted Groundmail MCP server, because it needs your other provider\'s API key. Import from the dashboard at https://app.groundmail.dev/import, or run the local server (npx -y groundmail-mcp) where the key stays on your machine.'
 
@@ -671,7 +676,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   {
     name: 'send_email',
     description:
-      'Send a transactional email via Groundmail. Provide subject + html/text, or a published template_id / template_alias with optional variables. To test without delivering anything, send to a simulator address: delivered@, bounce@, block@, complaint@, suppressed@ or delayed@simulator.groundmail.dev (plus addressing like bounce+test1@ works); the result has test: true and webhooks fire as for real mail.',
+      'Send a transactional email via Groundmail. Provide subject + html/text, or a published template_id / template_alias with optional variables. To test without delivering anything, send to a simulator address: delivered@, bounce@, block@, complaint@, suppressed@ or delayed@simulator.groundmail.dev (plus addressing like bounce+test1@ works); the result has test: true and webhooks fire as for real mail. Do not put payment card numbers, government ID numbers, health information or passwords in the content.',
     inputSchema: {
       type: 'object',
       properties: {

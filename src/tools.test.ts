@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { callMcpTool, formatToolError } from './tools'
+import { BILLING_IN_DASHBOARD_NOTE, callMcpTool, formatToolError } from './tools'
 
 function mockClient() {
   return {
@@ -368,7 +368,9 @@ describe('callMcpTool', () => {
     expect(text).toContain('code: forbidden (HTTP 403)')
     expect(text).toContain('upgrade: https://app.groundmail.dev/settings/billing')
     expect(text).toContain('how to fix: https://docs.groundmail.dev/errors#forbidden')
+    expect(text).toContain(BILLING_IN_DASHBOARD_NOTE)
     expect(formatToolError(new Error('boom'))).toBe('boom')
+    expect(formatToolError({ message: 'Not found', code: 'not_found', status: 404 })).not.toContain('billing')
   })
 
   it('formats the hint, docs link and required scope the SDK error carries', () => {

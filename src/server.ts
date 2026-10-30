@@ -6,14 +6,15 @@ import { Groundmail } from 'groundmail'
 import { callMcpTool, HTTP_EXCLUDED_TOOL_MESSAGE, HTTP_EXCLUDED_TOOLS, MCP_TOOLS, resolveApiKey, textResult } from './tools.js'
 
 /** Keep in step with package.json `version`. */
-export const MCP_SERVER_VERSION = '0.19.1'
+export const MCP_SERVER_VERSION = '0.19.2'
 
 /** Sent to clients on initialize; agents read it before calling tools. */
 export const MCP_SERVER_INSTRUCTIONS = [
   'Groundmail sends transactional email from domains the user has verified.',
   'To test before a domain is verified, call send_email with from "noreply@mail.groundmail.dev" and to set to the Groundmail account email; sandbox sends to any other address are rejected.',
-  'Sending to other recipients needs a verified domain (list_domains, create_domain, apply_domain_dns, verify_domain) and a payment method on the account (no charge on the Free plan).',
+  'Sending to other recipients needs a verified domain (list_domains, create_domain, apply_domain_dns, verify_domain) and billing set up by the user in the Groundmail dashboard at https://app.groundmail.dev/settings/billing (no charge on the Free plan).',
   'Confirm with the user before sending email to anyone other than themselves.',
+  'Never ask for or accept payment card numbers, passwords, government ID numbers, health information or other sensitive personal data in chat; the user enters billing and account details only in the Groundmail dashboard.',
   'Errors include a stable code and a link to https://docs.groundmail.dev/errors#<code> that says how to fix them.',
 ].join(' ')
 
