@@ -883,7 +883,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: false,
-      openWorldHint: false,
+      openWorldHint: true,
     },
   },
   {
@@ -931,7 +931,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       required: ['email'],
     },
     outputSchema: validateEmailOutput,
-    annotations: readOnly('Validate email address'),
+    annotations: { ...readOnly('Validate email address'), openWorldHint: true },
   },
   {
     name: 'add_suppression',
