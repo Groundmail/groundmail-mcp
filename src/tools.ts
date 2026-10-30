@@ -708,7 +708,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   },
   {
     name: 'get_email',
-    description: 'Get a single email by public id (msg_…).',
+    description:
+      "Get a single email by public id (msg_…): its status, and in delivery the recipient's mail server, its exact reply (250 … when accepted, 5xx … when refused), TLS and the latest deferral. delivered_at minus created_at is how long it took to land.",
     inputSchema: {
       type: 'object',
       properties: {

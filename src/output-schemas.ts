@@ -66,6 +66,27 @@ function heldBackItem(): Schema {
   )
 }
 
+const nullableBoolean = (description: string): Schema => ({ type: ['boolean', 'null'], description })
+
+/** The receiving server's side of the latest delivery attempt (`delivery` on an email). */
+export const emailDelivery: Schema = {
+  ...object(
+    {
+      receiving_server: nullableString("Hostname of the recipient's mail server, e.g. gmail-smtp-in.l.google.com"),
+      response: nullableString(
+        'Its exact SMTP reply to the latest attempt that finished: 250 … when it accepted the email, 5xx … when it refused it',
+      ),
+      tls: nullableBoolean('Whether the connection used TLS; null when the attempt did not say'),
+      deferred_response: nullableString('Its reply to the latest deferral (a 4xx such as greylisting; delivery is retried); null when none'),
+      deferred_at: nullableString('When the latest deferral happened (ISO 8601)'),
+    },
+    ['receiving_server', 'response', 'tls', 'deferred_response', 'deferred_at'],
+  ),
+  type: ['object', 'null'],
+  description:
+    "What the recipient's mail server said about the latest delivery attempt. Null until an attempt reports one, and for test emails. delivered_at minus created_at is how long it took to land",
+}
+
 export const emailItem: Schema = object(
   {
     id: string('Email id (msg_…)'),
@@ -84,6 +105,7 @@ export const emailItem: Schema = object(
       description:
         'Why it bounced: hard (address cannot receive; suppressed) or block (the receiving server refused the sender for reputation or policy; address not suppressed, safe to retry later). Null if it did not bounce',
     },
+    delivery: emailDelivery,
     held_back: arrayOf(
       heldBackItem(),
       'Recipients Groundmail validation held back before sending, with why; empty when none were',

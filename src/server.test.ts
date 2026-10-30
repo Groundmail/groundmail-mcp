@@ -18,6 +18,13 @@ const email = {
   status: 'delivered',
   last_event: 'email.delivered',
   bounce_reason: null,
+  delivery: {
+    receiving_server: 'mx.example.com',
+    response: '250 2.0.0 Ok: queued as 4F2B1C',
+    tls: true,
+    deferred_response: null,
+    deferred_at: null,
+  },
   held_back: [],
   tags: [],
   scheduled_at: null,
@@ -141,7 +148,8 @@ const API_RESPONSES: Record<string, unknown> = {
     },
   },
   send_email: { id: 'msg_1', status: 'queued' },
-  list_emails: { emails: [email], ...page },
+  // `delivery` is null until a delivery attempt reports one.
+  list_emails: { emails: [email, { ...email, id: 'msg_2', status: 'sent', delivered_at: null, delivery: null }], ...page },
   get_email: { email },
   list_domains: { domains: [domain], ...page },
   create_domain: {
