@@ -797,7 +797,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: false,
-      openWorldHint: false,
+      openWorldHint: true,
     },
   },
   {
