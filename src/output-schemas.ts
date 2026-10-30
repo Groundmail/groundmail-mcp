@@ -444,7 +444,7 @@ export const migrationOutput: ObjectSchema = object(
       object(
         {
           id: string('Import id'),
-          provider: string('sendgrid, postmark or mailgun'),
+          provider: string('sendgrid, postmark, mailgun, resend or ses'),
           dry_run: boolean('True for a preview: nothing was written'),
           status: string('completed, partial (some items failed, each listed), failed, or in_progress'),
           started_at: string('When the import started (ISO 8601)'),

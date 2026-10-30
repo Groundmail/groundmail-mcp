@@ -57,6 +57,34 @@ describe('callMcpTool', () => {
     expect(client.receivedEmails.list).toHaveBeenLastCalledWith({ limit: undefined, cursor: undefined, domain: undefined })
   })
 
+  it('import_from_provider passes a Resend key, and Amazon SES credentials and region', async () => {
+    const run = vi.fn().mockResolvedValue({ id: 'mig_1', status: 'completed' })
+    const client = { migrations: { run } }
+
+    await callMcpTool(client as never, 'import_from_provider', { provider: 'resend', api_key: 're_full', dry_run: true })
+    expect(run).toHaveBeenLastCalledWith({ provider: 'resend', api_key: 're_full', dry_run: true })
+
+    await callMcpTool(client as never, 'import_from_provider', {
+      provider: 'ses',
+      aws_access_key_id: 'AKIAIOSFODNN7EXAMPLE',
+      aws_secret_access_key: 'secret',
+      aws_region: 'eu-west-1',
+      resources: ['suppressions'],
+    })
+    expect(run).toHaveBeenLastCalledWith({
+      provider: 'ses',
+      aws_access_key_id: 'AKIAIOSFODNN7EXAMPLE',
+      aws_secret_access_key: 'secret',
+      aws_region: 'eu-west-1',
+      resources: ['suppressions'],
+    })
+
+    const missing = await callMcpTool(client as never, 'import_from_provider', { provider: 'ses', aws_access_key_id: 'AKIA1' })
+    expect(missing.isError).toBe(true)
+    expect(JSON.stringify(missing.content)).toContain('aws_region')
+    expect(run).toHaveBeenCalledTimes(2)
+  })
+
   it('send_email calls the SDK', async () => {
     const client = mockClient()
     const result = await callMcpTool(client as never, 'send_email', {

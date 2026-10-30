@@ -472,22 +472,47 @@ export async function callMcpTool(
       }
       case 'import_from_provider': {
         const provider = optString(args, 'provider')
-        if (provider !== 'sendgrid' && provider !== 'postmark' && provider !== 'mailgun') {
-          return textResult('Missing or unknown provider: use sendgrid, postmark or mailgun', true)
+        if (provider !== 'sendgrid' && provider !== 'postmark' && provider !== 'mailgun' && provider !== 'resend' && provider !== 'ses') {
+          return textResult('Missing or unknown provider: use sendgrid, postmark, mailgun, resend or ses', true)
         }
-        const apiKey = optString(args, 'api_key')
-        if (!apiKey) return textResult('Missing required argument: api_key (the key of the account to import from)', true)
-        const region = optString(args, 'region')
         const resources = optStringArray(args, 'resources')
         const cursor = optString(args, 'cursor')
-        const params: CreateMigrationParams = {
-          provider,
-          api_key: apiKey,
-          ...(optString(args, 'account_api_key') ? { account_api_key: optString(args, 'account_api_key') } : {}),
-          ...(region === 'us' || region === 'eu' ? { region } : {}),
+        const common = {
           ...(resources?.length ? { resources: resources as MigrationResource[] } : {}),
           ...(optBoolean(args, 'dry_run') ? { dry_run: true } : {}),
           ...(cursor ? { cursor } : {}),
+        }
+        let params: CreateMigrationParams
+        if (provider === 'ses') {
+          const accessKeyId = optString(args, 'aws_access_key_id')
+          const secret = optString(args, 'aws_secret_access_key')
+          const awsRegion = optString(args, 'aws_region')
+          if (!accessKeyId || !secret || !awsRegion) {
+            return textResult(
+              'Amazon SES needs aws_access_key_id, aws_secret_access_key and aws_region (one region per import), from an IAM user or role with the read-only import policy: https://docs.groundmail.dev/migrations#amazon-ses-iam-policy',
+              true,
+            )
+          }
+          const sessionToken = optString(args, 'aws_session_token')
+          params = {
+            provider,
+            aws_access_key_id: accessKeyId,
+            aws_secret_access_key: secret,
+            ...(sessionToken ? { aws_session_token: sessionToken } : {}),
+            aws_region: awsRegion,
+            ...common,
+          }
+        } else {
+          const apiKey = optString(args, 'api_key')
+          if (!apiKey) return textResult('Missing required argument: api_key (the key of the account to import from)', true)
+          const region = optString(args, 'region')
+          params = {
+            provider,
+            api_key: apiKey,
+            ...(optString(args, 'account_api_key') ? { account_api_key: optString(args, 'account_api_key') } : {}),
+            ...(region === 'us' || region === 'eu' ? { region } : {}),
+            ...common,
+          }
         }
         return textResult({ migration: await client.migrations.run(params) })
       }
@@ -1267,17 +1292,22 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   {
     name: 'import_from_provider',
     description:
-      'Beta. Import templates, suppressions (bounces, complaints, unsubscribes), sending domains and webhooks from SendGrid, Postmark or Mailgun into Groundmail. Ask the user for their provider API key; it is used for this import only and never stored, so do not write it to a file. Run with dry_run first to show the user what will be imported. Imported webhooks start disabled; templates that use logic Groundmail does not convert are imported as drafts. The result includes what needs attention, the code change, and a prompt for making it.',
+      'Beta. Import templates, suppressions (bounces, complaints, unsubscribes), sending domains and webhooks from SendGrid, Postmark, Mailgun, Resend or Amazon SES into Groundmail. Ask the user for their provider API key (Resend: a Full access key; Amazon SES: an access key with the read-only import policy, and the region); it is used for this import only and never stored, so do not write it to a file. Run with dry_run first to show the user what will be imported. Imported webhooks start disabled; Amazon SES has no webhooks, so its configuration sets are reported in the notes instead. Templates that use logic Groundmail does not convert are imported as drafts. The result includes what needs attention, the code change, and a prompt for making it.',
     inputSchema: {
       type: 'object',
       properties: {
-        provider: { type: 'string', enum: ['sendgrid', 'postmark', 'mailgun'], description: 'Provider to import from' },
+        provider: { type: 'string', enum: ['sendgrid', 'postmark', 'mailgun', 'resend', 'ses'], description: 'Provider to import from (ses = Amazon SES)' },
         api_key: {
           type: 'string',
-          description: 'SendGrid API key, Postmark server API token, or Mailgun private API key (read access is enough)',
+          description:
+            'Not for ses. SendGrid API key, Postmark server API token, Mailgun private API key (read access is enough), or a Resend API key with Full access',
         },
         account_api_key: { type: 'string', description: 'Postmark only: account API token, needed to import sending domains' },
         region: { type: 'string', enum: ['us', 'eu'], description: 'SendGrid and Mailgun: eu for EU-region accounts (default us)' },
+        aws_access_key_id: { type: 'string', description: 'Amazon SES only: access key ID of an IAM user or role with the read-only import policy' },
+        aws_secret_access_key: { type: 'string', description: 'Amazon SES only: the secret access key' },
+        aws_session_token: { type: 'string', description: 'Amazon SES only, temporary credentials: the session token' },
+        aws_region: { type: 'string', description: 'Amazon SES only: the region to import, such as us-east-1. One region per import' },
         resources: {
           type: 'array',
           items: { type: 'string', enum: ['domains', 'webhooks', 'templates', 'suppressions'] },
@@ -1286,7 +1316,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         dry_run: { type: 'boolean', description: 'Preview without writing anything' },
         cursor: { type: 'string', description: 'next_cursor from an import that stopped early, to continue it' },
       },
-      required: ['provider', 'api_key'],
+      required: ['provider'],
     },
     outputSchema: migrationOutput,
     // Re-running skips what already exists, so it is safe to repeat.
@@ -1301,7 +1331,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   {
     name: 'get_import_report',
     description:
-      'Beta. The stored report of an import from SendGrid, Postmark or Mailgun: what was imported, skipped and failed, the DNS changes per domain, what still needs doing, the code change and a prompt for it. Pass the import id, or omit it for the latest import. Previews are not stored.',
+      'Beta. The stored report of an import from SendGrid, Postmark, Mailgun, Resend or Amazon SES: what was imported, skipped and failed, the DNS changes per domain, what still needs doing, the code change and a prompt for it. Pass the import id, or omit it for the latest import. Previews are not stored.',
     inputSchema: {
       type: 'object',
       properties: {
