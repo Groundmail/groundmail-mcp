@@ -128,6 +128,31 @@ export const emailItem: Schema = object(
   ['id', 'from', 'to', 'subject', 'status'],
 )
 
+const blocklistListingProps = {
+  list: string('List name: Spamhaus DBL, SURBL or URIBL'),
+  list_id: string('List id: spamhaus-dbl, surbl or uribl'),
+  name: string('The listed name: the domain itself or its main domain'),
+  reason: string('What the list says it is listed for, for example spam domain'),
+  listed_since: string('When the daily check first found it listed (ISO 8601)'),
+  info_url: string('Where to look the name up and request removal'),
+}
+
+const domainBlocklists: Schema = object(
+  {
+    status: string('Blocklist status: clear, listed, or unknown (not checked yet, not verified, or no list answered)'),
+    checked_at: nullableString('When the last daily blocklist check ran (ISO 8601)'),
+    names: stringArray('Names checked: the domain and its main domain, or one name for a main domain'),
+    main_domain: string('The main (registrable) domain'),
+    listings: arrayOf(object(blocklistListingProps, ['list', 'name']), 'Current listings, main domain first'),
+    removed: arrayOf(
+      object({ ...blocklistListingProps, removed_at: string('When it came off the list (ISO 8601)') }, ['list', 'name']),
+      'Recent removals, newest first',
+    ),
+    unanswered_lists: stringArray('Lists that did not answer the last check'),
+  },
+  ['status'],
+)
+
 export const domainItem: Schema = object(
   {
     id: string('Domain id'),
@@ -143,6 +168,7 @@ export const domainItem: Schema = object(
     inbound_enabled: boolean('Whether inbound receiving is enabled'),
     inbound_status: string('Inbound status: disabled, pending, active or error'),
     inbound_error: nullableString('Inbound setup error, if any'),
+    blocklists: described(domainBlocklists, 'Daily check of the domain and its main domain on Spamhaus DBL, SURBL and URIBL. A listing never pauses sending'),
     tenant: nullableString('External id of the tenant that owns the domain. Absent for a domain the whole account can use'),
   },
   ['id', 'name', 'status'],
