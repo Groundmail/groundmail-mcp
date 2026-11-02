@@ -68,6 +68,19 @@ const suppression = {
   created_at: NOW,
   updated_at: NOW,
 }
+const sender = {
+  id: '4f0c7e2a-6b1d-4c55-9a3e-2d8f6a1b9c10',
+  name: 'Acme Billing',
+  address: 'billing@mail.acme.com',
+  from: 'Acme Billing <billing@mail.acme.com>',
+  reply_to: 'billing@acme.com',
+  handle: 'billing',
+  is_default: true,
+  used_by: { automations: 1, templates: 2 },
+  created_at: NOW,
+  updated_at: NOW,
+}
+
 const template = {
   id: 'tpl_1',
   name: 'Welcome',
@@ -215,6 +228,8 @@ const API_RESPONSES: Record<string, unknown> = {
     delivered: true,
     deliveries: [{ endpoint_id: 'wh_1', url: 'https://example.com/hooks', success: true, status: 200 }],
   },
+  list_senders: { data: [sender] },
+  create_sender: { sender },
   list_tenants: { data: [tenant], ...page },
   create_tenant: { tenant },
   get_tenant: { tenant },
@@ -370,6 +385,7 @@ const TOOL_ARGS: Record<string, Record<string, unknown>> = {
   get_template: { alias: 'welcome' },
   create_template: { name: 'Welcome', subject: 'Hi' },
   publish_template: { alias: 'welcome' },
+  create_sender: { name: 'Acme Billing', address: 'billing@mail.acme.com' },
   send_test_webhook_event: { event: 'email.bounced' },
   import_from_provider: { provider: 'sendgrid', api_key: 'SG.test_key_value', dry_run: true },
   get_import_report: { id: 'mig_1' },
@@ -397,6 +413,7 @@ function toolForRequest(method: string, path: string, body: string | undefined):
     return 'update_tenant'
   }
   if (path.startsWith('/tenants')) return method === 'POST' ? 'create_tenant' : 'list_tenants'
+  if (path.startsWith('/senders')) return method === 'POST' ? 'create_sender' : 'list_senders'
   if (path.startsWith('/migrations')) return method === 'POST' ? 'import_from_provider' : 'get_import_report'
   if (path.startsWith('/test-inbox/wait')) return 'wait_for_test_email'
   if (path.startsWith('/test-inbox/emails/')) return 'get_test_email'
@@ -513,7 +530,7 @@ describe('tool definitions', () => {
     const { client } = await connect()
     const { tools } = await client.listTools()
     expect(tools.map((tool) => tool.name).sort()).toEqual(MCP_TOOLS.map((tool) => tool.name).sort())
-    expect(tools).toHaveLength(38)
+    expect(tools).toHaveLength(40)
   })
 
   it('gives every tool a description, a title and complete annotations', async () => {

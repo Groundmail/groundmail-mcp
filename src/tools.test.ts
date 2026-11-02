@@ -127,6 +127,47 @@ describe('callMcpTool', () => {
     expect(client.emails.list).toHaveBeenCalledWith(expect.objectContaining({ stream: 'newsletter' }))
   })
 
+  it('send_email sends as a saved sender without from', async () => {
+    const client = mockClient()
+    await callMcpTool(client as never, 'send_email', {
+      sender: 'billing',
+      to: 'owner@example.com',
+      template_alias: 'receipt',
+    })
+    const params = client.emails.send.mock.calls[0][0]
+    expect(params).toMatchObject({ sender: 'billing', to: 'owner@example.com', template: { id: 'receipt' } })
+    expect(params).not.toHaveProperty('from')
+  })
+
+  it('list_senders and create_sender call the SDK', async () => {
+    const senders = {
+      list: vi.fn().mockResolvedValue({ data: [] }),
+      create: vi.fn().mockResolvedValue({ sender: { id: 's_1', handle: 'billing' } }),
+    }
+    const client = { senders }
+    await callMcpTool(client as never, 'list_senders', {})
+    expect(senders.list).toHaveBeenCalled()
+
+    const missing = await callMcpTool(client as never, 'create_sender', { name: 'Acme Billing' })
+    expect(missing.isError).toBe(true)
+    expect(senders.create).not.toHaveBeenCalled()
+
+    await callMcpTool(client as never, 'create_sender', {
+      name: 'Acme Billing',
+      address: 'billing@mail.acme.com',
+      reply_to: 'billing@acme.com',
+      handle: 'billing',
+      is_default: true,
+    })
+    expect(senders.create).toHaveBeenCalledWith({
+      name: 'Acme Billing',
+      address: 'billing@mail.acme.com',
+      reply_to: 'billing@acme.com',
+      handle: 'billing',
+      is_default: true,
+    })
+  })
+
   it('send_email omits subject when using a template', async () => {
     const client = mockClient()
     await callMcpTool(client as never, 'send_email', {
@@ -147,15 +188,16 @@ describe('callMcpTool', () => {
     expect(client.emails.send.mock.calls[0]?.[0]).not.toHaveProperty('subject')
   })
 
-  it('send_email requires from, to, and subject', async () => {
+  it('send_email requires to and subject; from is left to the API (default sender)', async () => {
     const client = mockClient()
-    const missingFrom = await callMcpTool(client as never, 'send_email', {
+    // No from or sender: the team's default sender may apply, so the API decides.
+    const noFrom = await callMcpTool(client as never, 'send_email', {
       to: 'owner@example.com',
       subject: 'Hi',
     })
-    expect(missingFrom.isError).toBe(true)
-    expect(missingFrom.content[0]?.text).toMatch(/from/i)
-    expect(client.emails.send).not.toHaveBeenCalled()
+    expect(noFrom.isError).toBeFalsy()
+    expect(client.emails.send.mock.calls[0]?.[0]).not.toHaveProperty('from')
+    client.emails.send.mockClear()
 
     const missingTo = await callMcpTool(client as never, 'send_email', {
       from: 'noreply@mail.groundmail.dev',

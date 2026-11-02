@@ -257,6 +257,7 @@ export const templateItem: Schema = object(
     unsubscribe_enabled: boolean('Whether managed unsubscribe is on for sends using this template'),
     category: string('transactional or product'),
     folder: nullableString('Folder the template is filed in, or null'),
+    sender_id: nullableString('Sender the template goes out as when a send sets neither from nor sender; null uses the default sender'),
     published_version_id: nullableString('Id of the version sends currently use'),
     published_at: nullableString('When the template was last published (ISO 8601)'),
     created_at: string('When the template was created (ISO 8601)'),
@@ -526,6 +527,35 @@ export const tenantItem: Schema = object(
     updated_at: string('When the tenant was last changed (ISO 8601)'),
   },
   ['id', 'external_id', 'status'],
+)
+
+export const senderItem: Schema = object(
+  {
+    id: string('Sender id'),
+    name: string('The name people see in their inbox'),
+    address: string('The address it sends from, on a verified domain'),
+    from: string('Name and address as the inbox shows them'),
+    reply_to: nullableString('Where replies go; null means replies go to address'),
+    handle: string('What sends use to name it (sender: "billing")'),
+    is_default: boolean('Sends with no from, sender or template sender go out as the default'),
+    used_by: described(
+      object({
+        automations: number('Automations that send as it'),
+        templates: number('Templates that send as it'),
+      }),
+      'How many automations and templates send as it',
+    ),
+    created_at: string('When the sender was created (ISO 8601)'),
+    updated_at: string('When the sender was last changed (ISO 8601)'),
+  },
+  ['id', 'name', 'address', 'handle', 'is_default'],
+)
+
+export const senderOutput: ObjectSchema = object({ sender: described(senderItem, 'The sender') }, ['sender'])
+
+export const listSendersOutput: ObjectSchema = object(
+  { data: arrayOf(senderItem, 'Every sender, the default first') },
+  ['data'],
 )
 
 export const tenantOutput: ObjectSchema = object({ tenant: described(tenantItem, 'The tenant') }, ['tenant'])

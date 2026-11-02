@@ -19,11 +19,13 @@ import {
   domainWithRecordsOutput,
   emailItem,
   getEmailOutput,
+  listSendersOutput,
   migrationOutput,
   okOutput,
   pagedOutput,
   receivedEmailItem,
   sendEmailOutput,
+  senderOutput,
   suppressionItem,
   suppressionOutput,
   templateItem,
@@ -145,10 +147,10 @@ export async function callMcpTool(
     switch (name) {
       case 'send_email': {
         const from = optString(args, 'from')
+        const sender = optString(args, 'sender')
         const to = optString(args, 'to')
         const subject = optString(args, 'subject')
         const templateId = optString(args, 'template_id') || optString(args, 'template_alias')
-        if (!from) return textResult('Missing required argument: from', true)
         if (!to) return textResult('Missing required argument: to', true)
         if (!templateId && !subject) {
           return textResult('Provide subject, or template_id / template_alias', true)
@@ -163,7 +165,8 @@ export async function callMcpTool(
             ? (args.variables as Record<string, string | number | boolean>)
             : undefined
         const result = await client.emails.send({
-          from,
+          ...(from ? { from } : {}),
+          ...(sender ? { sender } : {}),
           to,
           ...(subject ? { subject } : {}),
           html: optString(args, 'html'),
@@ -372,6 +375,26 @@ export async function callMcpTool(
             text: optString(args, 'text'),
             alias: optString(args, 'alias'),
             ...(optString(args, 'folder') ? { folder: optString(args, 'folder') } : {}),
+            ...(optString(args, 'sender') ? { sender_id: optString(args, 'sender') } : {}),
+          }),
+        )
+      }
+      case 'list_senders': {
+        return textResult(await client.senders.list())
+      }
+      case 'create_sender': {
+        const senderName = optString(args, 'name')
+        const address = optString(args, 'address')
+        if (!senderName) return textResult('Missing required argument: name', true)
+        if (!address) return textResult('Missing required argument: address', true)
+        const isDefault = optBoolean(args, 'is_default')
+        return textResult(
+          await client.senders.create({
+            name: senderName,
+            address,
+            ...(optString(args, 'reply_to') ? { reply_to: optString(args, 'reply_to') } : {}),
+            ...(optString(args, 'handle') ? { handle: optString(args, 'handle') } : {}),
+            ...(isDefault !== undefined ? { is_default: isDefault } : {}),
           }),
         )
       }
@@ -680,7 +703,16 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        from: { type: 'string', description: 'Sender address (must match a verified domain or sandbox sender)' },
+        from: {
+          type: 'string',
+          description:
+            'Sender address (on a verified domain, or the sandbox sender). Optional when sender is set, the template has a sender, or the team has a default sender (list_senders); when set it wins',
+        },
+        sender: {
+          type: 'string',
+          description:
+            'A saved sender\'s handle or id from list_senders (for example billing): sends as its name and address, and replies go to its reply-to unless reply_to is set. Ignored when from is set',
+        },
         to: {
           type: 'string',
           description: 'Recipient email address. A …@simulator.groundmail.dev address simulates an outcome and never delivers',
@@ -706,7 +738,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
           'Send as this tenant: the send uses its domains, suppression list, pause switch and daily limit. Omit to send from the account as a whole',
         ),
       },
-      required: ['from', 'to'],
+      required: ['to'],
     },
     outputSchema: sendEmailOutput,
     annotations: {
@@ -1060,6 +1092,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         text: { type: 'string', description: 'Plain-text body' },
         alias: { type: 'string', description: 'Optional short alias to reference the template by instead of its id' },
         folder: { type: 'string', description: 'Optional folder to file the template in; created if it does not exist' },
+        sender: { type: 'string', description: 'Sender handle or id (list_senders) the template goes out as when a send sets neither from nor sender' },
       },
       required: ['name', 'subject'],
     },
@@ -1088,6 +1121,38 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       title: 'Publish template',
       readOnlyHint: false,
       destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: 'list_senders',
+    description:
+      'List saved senders: name, address, reply-to and handle, the default first, with how many automations and templates use each. Send as one with send_email sender instead of typing from.',
+    inputSchema: { type: 'object', properties: {} },
+    outputSchema: listSendersOutput,
+    annotations: readOnly('List senders'),
+  },
+  {
+    name: 'create_sender',
+    description:
+      'Save a sender: the name people see, an address on a verified domain (list_domains), an optional reply-to, and a handle sends use (sender: "billing"). The first sender becomes the default unless is_default is false.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'The name people see, for example Acme Billing' },
+        address: { type: 'string', description: 'Address on one of the team\'s verified domains, for example billing@mail.acme.com' },
+        reply_to: { type: 'string', description: 'Where replies go. Leave it out to get replies at address' },
+        handle: { type: 'string', description: 'Lowercase letters, digits and hyphens. Made from name when left out' },
+        is_default: { type: 'boolean', description: 'Make it the default sender for sends with no from' },
+      },
+      required: ['name', 'address'],
+    },
+    outputSchema: senderOutput,
+    annotations: {
+      title: 'Create sender',
+      readOnlyHint: false,
+      destructiveHint: false,
       idempotentHint: false,
       openWorldHint: false,
     },
