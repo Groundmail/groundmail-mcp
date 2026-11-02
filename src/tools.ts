@@ -1107,7 +1107,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   },
   {
     name: 'publish_template',
-    description: 'Publish a template, snapshotting an immutable version for sends.',
+    description:
+      'Publish a template, snapshotting an immutable version for sends. Automation email steps send templates by reference, so publishing changes every automation step that uses this template as well as sends by its alias.',
     inputSchema: {
       type: 'object',
       properties: {
