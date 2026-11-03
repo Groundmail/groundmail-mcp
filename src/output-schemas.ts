@@ -122,6 +122,7 @@ export const emailItem: Schema = object(
     bounced_at: nullableString('When the email bounced (ISO 8601)'),
     opened_at: nullableString('First open (ISO 8601); needs open tracking on the sending domain'),
     clicked_at: nullableString('First tracked-link click (ISO 8601); needs click tracking on the sending domain'),
+    batch_id: nullableString('The batch send it came from (batch_…), for get_batch and cancel_batch; null for a single send'),
     tenant: nullableString('External id of the tenant the email was sent as. Present only when it was sent as a tenant'),
     stream: string('Mail stream it went out on: transactional, product or newsletter (each sends from its own IPs)'),
   },
@@ -322,6 +323,30 @@ export const validateEmailOutput: ObjectSchema = object(
 )
 
 export const getEmailOutput: ObjectSchema = object({ email: described(emailItem, 'The email') }, ['email'])
+
+export const batchOutput: ObjectSchema = object(
+  {
+    batch_id: string('Batch id (batch_…)'),
+    created_at: string("When the batch's first email was created (ISO 8601)"),
+    total: number('Emails in the batch'),
+    counts: {
+      type: 'object',
+      additionalProperties: { type: 'number' },
+      description: 'Emails by current status, for example { "scheduled": 98, "sent": 2 }. Only statuses with an email appear',
+    },
+  },
+  ['batch_id', 'created_at', 'total', 'counts'],
+)
+
+export const cancelBatchOutput: ObjectSchema = object(
+  {
+    batch_id: string('Batch id (batch_…)'),
+    cancelled: number('Scheduled emails this call cancelled'),
+    already_cancelled: number('Emails that were already cancelled before this call'),
+    not_cancellable: number('Emails already queued, sent or finished, which can no longer be cancelled'),
+  },
+  ['batch_id', 'cancelled', 'already_cancelled', 'not_cancellable'],
+)
 
 export const domainWithRecordsOutput: ObjectSchema = object(
   {

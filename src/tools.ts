@@ -10,6 +10,8 @@ import type {
 } from 'groundmail'
 import {
   applyDnsOutput,
+  batchOutput,
+  cancelBatchOutput,
   categoryOptOutItem,
   removeCategoryOptOutOutput,
   createWebhookOutput,
@@ -200,6 +202,16 @@ export async function callMcpTool(
         const id = optString(args, 'id')
         if (!id) return textResult('Missing required argument: id', true)
         return textResult(await client.emails.get(id))
+      }
+      case 'get_batch': {
+        const id = optString(args, 'batch_id')
+        if (!id) return textResult('Missing required argument: batch_id', true)
+        return textResult(await client.batches.get(id))
+      }
+      case 'cancel_batch': {
+        const id = optString(args, 'batch_id')
+        if (!id) return textResult('Missing required argument: batch_id', true)
+        return textResult(await client.batches.cancel(id))
       }
       case 'list_received_emails': {
         const inReplyToEmail = optString(args, 'in_reply_to_email')
@@ -797,6 +809,40 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
     outputSchema: getEmailOutput,
     annotations: readOnly('Get email'),
+  },
+  {
+    name: 'get_batch',
+    description:
+      'Get a batch send (the batch_id a batch send returned, also on each of its emails as batch_id): how many emails it has and how many are in each status now.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        batch_id: { type: 'string', description: 'Batch id (batch_…)' },
+      },
+      required: ['batch_id'],
+    },
+    outputSchema: batchOutput,
+    annotations: readOnly('Get batch'),
+  },
+  {
+    name: 'cancel_batch',
+    description:
+      'Cancel every email in a batch send that is still scheduled. Emails already queued or sent are left alone and counted in not_cancellable. Safe to repeat: a second call cancels nothing more. Confirm with the user before cancelling.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        batch_id: { type: 'string', description: 'Batch id (batch_…)' },
+      },
+      required: ['batch_id'],
+    },
+    outputSchema: cancelBatchOutput,
+    annotations: {
+      title: 'Cancel batch',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
   },
   {
     name: 'list_received_emails',

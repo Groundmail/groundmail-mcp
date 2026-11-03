@@ -10,6 +10,10 @@ function mockClient() {
       insights: vi.fn().mockResolvedValue({ window: '7d', totals: { sent: 1 } }),
       testWebhook: vi.fn().mockResolvedValue({ ok: true, payload: {}, delivered: false }),
     },
+    batches: {
+      get: vi.fn().mockResolvedValue({ batch_id: 'batch_1', created_at: '2026-11-03T00:00:00.000Z', total: 1, counts: { scheduled: 1 } }),
+      cancel: vi.fn().mockResolvedValue({ batch_id: 'batch_1', cancelled: 1, already_cancelled: 0, not_cancellable: 0 }),
+    },
     domains: {
       list: vi.fn().mockResolvedValue({ data: [], has_more: false, next_cursor: null }),
       create: vi.fn().mockResolvedValue({ domain: { id: 'dom_1', name: 'example.com' } }),
@@ -248,6 +252,19 @@ describe('callMcpTool', () => {
 
     await callMcpTool(client as never, 'get_email', { id: 'msg_1' })
     expect(client.emails.get).toHaveBeenCalledWith('msg_1')
+  })
+
+  it('get_batch and cancel_batch call the SDK', async () => {
+    const client = mockClient()
+    await callMcpTool(client as never, 'get_batch', { batch_id: 'batch_1' })
+    expect(client.batches.get).toHaveBeenCalledWith('batch_1')
+
+    const result = await callMcpTool(client as never, 'cancel_batch', { batch_id: 'batch_1' })
+    expect(client.batches.cancel).toHaveBeenCalledWith('batch_1')
+    expect(result.isError).toBeFalsy()
+
+    expect((await callMcpTool(client as never, 'cancel_batch', {})).isError).toBe(true)
+    expect(client.batches.cancel).toHaveBeenCalledTimes(1)
   })
 
   it('verify_domain calls the SDK', async () => {

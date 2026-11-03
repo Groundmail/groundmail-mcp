@@ -175,6 +175,8 @@ const API_RESPONSES: Record<string, unknown> = {
   // `delivery` is null until a delivery attempt reports one.
   list_emails: { emails: [email, { ...email, id: 'msg_2', status: 'sent', delivered_at: null, delivery: null }], ...page },
   get_email: { email },
+  get_batch: { batch_id: 'batch_1', created_at: NOW, total: 3, counts: { scheduled: 2, sent: 1 } },
+  cancel_batch: { batch_id: 'batch_1', cancelled: 2, already_cancelled: 0, not_cancellable: 1 },
   list_domains: { domains: [domain], ...page },
   create_domain: {
     domain,
@@ -386,6 +388,8 @@ API_RESPONSES.list_received_emails = {
 const TOOL_ARGS: Record<string, Record<string, unknown>> = {
   send_email: { from: 'noreply@example.com', to: 'ada@example.com', subject: 'Hi', text: 'Hi' },
   get_email: { id: 'msg_1' },
+  get_batch: { batch_id: 'batch_1' },
+  cancel_batch: { batch_id: 'batch_1' },
   create_domain: { name: 'example.com' },
   apply_domain_dns: { domain: 'example.com', provider: 'cloudflare' },
   verify_domain: { domain: 'example.com' },
@@ -427,6 +431,7 @@ function toolForRequest(method: string, path: string, body: string | undefined):
     return 'update_tenant'
   }
   if (path.startsWith('/tenants')) return method === 'POST' ? 'create_tenant' : 'list_tenants'
+  if (path.startsWith('/batches/')) return path.endsWith('/cancel') ? 'cancel_batch' : 'get_batch'
   if (path.startsWith('/brand')) return method === 'PUT' ? 'update_brand' : 'get_brand'
   if (path.startsWith('/senders')) return method === 'POST' ? 'create_sender' : 'list_senders'
   if (path.startsWith('/migrations')) return method === 'POST' ? 'import_from_provider' : 'get_import_report'
@@ -545,7 +550,7 @@ describe('tool definitions', () => {
     const { client } = await connect()
     const { tools } = await client.listTools()
     expect(tools.map((tool) => tool.name).sort()).toEqual(MCP_TOOLS.map((tool) => tool.name).sort())
-    expect(tools).toHaveLength(42)
+    expect(tools).toHaveLength(44)
   })
 
   it('gives every tool a description, a title and complete annotations', async () => {
@@ -599,6 +604,7 @@ describe('tool definitions', () => {
     expect(destructive.sort()).toEqual([
       'add_suppression',
       'apply_domain_dns',
+      'cancel_batch',
       'delete_webhook',
       'enable_dmarc_monitoring',
       'pause_tenant',
