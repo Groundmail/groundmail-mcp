@@ -6,6 +6,7 @@ import type {
   MigrationResource,
   TenantStreamPolicy,
   UpdateTenantParams,
+  WebhookDeliveryStatus,
   WebhookEventType,
 } from 'groundmail'
 import {
@@ -42,6 +43,8 @@ import {
   testWebhookOutput,
   validateEmailOutput,
   verifyDomainOutput,
+  webhookDeliveryItem,
+  webhookDeliveryOutput,
   webhookItem,
   type ObjectSchema,
 } from './output-schemas.js'
@@ -272,6 +275,32 @@ export async function callMcpTool(
             cursor: optString(args, 'cursor'),
           }),
         )
+      }
+      case 'list_webhook_deliveries': {
+        const webhookId = optString(args, 'webhook_id')
+        if (!webhookId) return textResult('Missing required argument: webhook_id', true)
+        return textResult(
+          await client.webhooks.deliveries.list(webhookId, {
+            limit: optNumber(args, 'limit'),
+            cursor: optString(args, 'cursor'),
+            status: optString(args, 'status') as WebhookDeliveryStatus | undefined,
+            event: optString(args, 'event') as WebhookEventType | undefined,
+            email_id: optString(args, 'email_id'),
+            q: optString(args, 'q'),
+          }),
+        )
+      }
+      case 'get_webhook_delivery': {
+        const webhookId = optString(args, 'webhook_id')
+        const id = optString(args, 'id')
+        if (!webhookId || !id) return textResult('Missing required arguments: webhook_id and id', true)
+        return textResult(await client.webhooks.deliveries.get(webhookId, id))
+      }
+      case 'resend_webhook_delivery': {
+        const webhookId = optString(args, 'webhook_id')
+        const id = optString(args, 'id')
+        if (!webhookId || !id) return textResult('Missing required arguments: webhook_id and id', true)
+        return textResult(await client.webhooks.deliveries.resend(webhookId, id))
       }
       case 'create_webhook': {
         const url = optString(args, 'url')
@@ -950,6 +979,61 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
     outputSchema: pagedOutput('webhooks', webhookItem, 'Webhook endpoints on this page'),
     annotations: readOnly('List webhooks'),
+  },
+  {
+    name: 'list_webhook_deliveries',
+    description:
+      'List the delivery log of one webhook endpoint, newest first: every event sent to it in the last 30 days with its status, attempts and response. Use it to find failed deliveries.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        webhook_id: { type: 'string', description: 'Webhook id' },
+        status: { type: 'string', enum: ['pending', 'retrying', 'delivered', 'failed'], description: 'Only this status' },
+        event: { type: 'string', description: 'Only this event type, for example email.delivered' },
+        email_id: { type: 'string', description: 'Only deliveries for this email' },
+        q: { type: 'string', description: 'An exact email id, or part of a recipient address' },
+        ...paginationProps,
+      },
+      required: ['webhook_id'],
+    },
+    outputSchema: pagedOutput('deliveries', webhookDeliveryItem, 'Deliveries on this page'),
+    annotations: readOnly('List webhook deliveries'),
+  },
+  {
+    name: 'get_webhook_delivery',
+    description:
+      'Get one webhook delivery: every attempt with its status code and latency, the payload sent, and what the endpoint replied (first 2 KB).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        webhook_id: { type: 'string', description: 'Webhook id' },
+        id: { type: 'string', description: 'Delivery id' },
+      },
+      required: ['webhook_id', 'id'],
+    },
+    outputSchema: webhookDeliveryOutput,
+    annotations: readOnly('Get webhook delivery'),
+  },
+  {
+    name: 'resend_webhook_delivery',
+    description:
+      'Send a delivery again: the same payload as a new delivery, signed afresh, with the usual retries. The original stays as it was. The endpoint must be turned on; limited to 30 resends a minute.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        webhook_id: { type: 'string', description: 'Webhook id' },
+        id: { type: 'string', description: 'Delivery id to resend' },
+      },
+      required: ['webhook_id', 'id'],
+    },
+    outputSchema: webhookDeliveryOutput,
+    annotations: {
+      title: 'Resend webhook delivery',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
   },
   {
     name: 'create_webhook',

@@ -15,6 +15,7 @@ const nullableString = (description: string): Schema => ({ type: ['string', 'nul
 const string = (description: string): Schema => ({ type: 'string', description })
 const boolean = (description: string): Schema => ({ type: 'boolean', description })
 const number = (description: string): Schema => ({ type: 'number', description })
+const nullableNumber = (description: string): Schema => ({ type: ['number', 'null'], description })
 const stringArray = (description: string): Schema => ({
   type: 'array',
   items: { type: 'string' },
@@ -198,10 +199,37 @@ export const webhookItem: Schema = object(
     events: stringArray('Event types delivered to this endpoint'),
     enabled: boolean('Whether the endpoint receives events'),
     tenants: stringArray('Present only when the endpoint receives email events for some tenants only: their external ids'),
+    health: {
+      type: 'object',
+      description: 'Delivery health: last_24h (total, delivered, failed, median_latency_ms), last_delivery_at, last_status, last_response_status, and failing (a delivery failed all 5 attempts in the last 24 hours)',
+    },
     created_at: string('When the endpoint was created (ISO 8601)'),
     updated_at: string('When the endpoint was last changed (ISO 8601)'),
   },
   ['id', 'url', 'events'],
+)
+
+export const webhookDeliveryItem: Schema = object(
+  {
+    id: string('Delivery id'),
+    webhook_id: string('The endpoint it was sent to'),
+    event: string('Event type'),
+    status: string('pending, retrying, delivered or failed'),
+    attempt_count: number('Attempts made so far'),
+    max_attempts: number('Attempts this delivery gets'),
+    email_id: nullableString('The email this event is about'),
+    recipient: nullableString('The first recipient, or the contact'),
+    test: boolean('True for a simulated event'),
+    response_status: nullableNumber('HTTP status of the latest attempt'),
+    error_kind: nullableString('Why nothing answered: timeout or connection'),
+    latency_ms: nullableNumber('Response time of the latest attempt in ms'),
+    last_attempt_at: nullableString('When the latest attempt started (ISO 8601)'),
+    next_attempt_at: nullableString('When the next retry runs (ISO 8601)'),
+    resent_from: nullableString('The delivery this one resends'),
+    created_at: string('When the delivery was created (ISO 8601)'),
+    updated_at: string('When the delivery last changed (ISO 8601)'),
+  },
+  ['id', 'webhook_id', 'event', 'status'],
 )
 
 export const suppressionItem: Schema = object(
@@ -409,6 +437,16 @@ export const createWebhookOutput: ObjectSchema = object(
   ['webhook', 'secret'],
 )
 
+export const webhookDeliveryOutput: ObjectSchema = object(
+  {
+    delivery: {
+      ...described(webhookDeliveryItem, 'The delivery, with `attempts` and the `payload` sent'),
+      additionalProperties: true,
+    },
+  },
+  ['delivery'],
+)
+
 export const suppressionOutput: ObjectSchema = object({ suppression: described(suppressionItem, 'The suppression entry') }, ['suppression'])
 
 export const templateOutput: ObjectSchema = object({ template: described(templateItem, 'The template') }, ['template'])
@@ -527,7 +565,6 @@ export const migrationOutput: ObjectSchema = object(
   ['migration'],
 )
 
-const nullableNumber = (description: string): Schema => ({ type: ['number', 'null'], description })
 
 export const tenantItem: Schema = object(
   {

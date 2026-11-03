@@ -202,6 +202,9 @@ const API_RESPONSES: Record<string, unknown> = {
     inbound_error: null,
   },
   list_webhooks: { webhooks: [webhook], ...page },
+  list_webhook_deliveries: { deliveries: [{ id: 'd1', webhook_id: 'w1', event: 'email.delivered', status: 'delivered' }], ...page },
+  get_webhook_delivery: { delivery: { id: 'd1', webhook_id: 'w1', event: 'email.delivered', status: 'delivered', attempts: [], payload: {} } },
+  resend_webhook_delivery: { delivery: { id: 'd2', webhook_id: 'w1', event: 'email.delivered', status: 'pending', attempts: [], payload: {} } },
   create_webhook: { webhook, secret: 'whsec_x' },
   delete_webhook: { ok: true },
   list_suppressions: { data: [suppression], ...page },
@@ -386,6 +389,9 @@ API_RESPONSES.list_received_emails = {
 }
 
 const TOOL_ARGS: Record<string, Record<string, unknown>> = {
+  list_webhook_deliveries: { webhook_id: 'w1' },
+  get_webhook_delivery: { webhook_id: 'w1', id: 'd1' },
+  resend_webhook_delivery: { webhook_id: 'w1', id: 'd1' },
   send_email: { from: 'noreply@example.com', to: 'ada@example.com', subject: 'Hi', text: 'Hi' },
   get_email: { id: 'msg_1' },
   get_batch: { batch_id: 'batch_1' },
@@ -448,6 +454,9 @@ function toolForRequest(method: string, path: string, body: string | undefined):
   if (path.endsWith('/dmarc')) return method === 'POST' ? 'enable_dmarc_monitoring' : 'get_dmarc_report'
   if (path.startsWith('/domains/')) return action === 'apply' ? 'apply_domain_dns' : 'verify_domain'
   if (path.startsWith('/domains')) return method === 'POST' ? 'create_domain' : 'list_domains'
+  if (path.endsWith('/resend') && path.startsWith('/webhooks/')) return 'resend_webhook_delivery'
+  if (/^\/webhooks\/[^/]+\/deliveries\/[^/?]+$/.test(path)) return 'get_webhook_delivery'
+  if (path.includes('/deliveries')) return 'list_webhook_deliveries'
   if (path.startsWith('/webhooks/')) return 'delete_webhook'
   if (path.startsWith('/webhooks')) return method === 'POST' ? 'create_webhook' : 'list_webhooks'
   if (path.startsWith('/suppressions') && path.includes('type=category_opt_out')) {
@@ -550,7 +559,7 @@ describe('tool definitions', () => {
     const { client } = await connect()
     const { tools } = await client.listTools()
     expect(tools.map((tool) => tool.name).sort()).toEqual(MCP_TOOLS.map((tool) => tool.name).sort())
-    expect(tools).toHaveLength(44)
+    expect(tools).toHaveLength(47)
   })
 
   it('gives every tool a description, a title and complete annotations', async () => {
