@@ -81,6 +81,17 @@ const sender = {
   updated_at: NOW,
 }
 
+const brand = {
+  is_set: true,
+  settings: { linkColor: '#2f6feb' },
+  logo: { url: 'https://cdn.acme.com/logo.png', width: 120, align: 'left' },
+  accent_color: '#2f6feb',
+  company_name: 'Acme Inc',
+  address: '548 Market St',
+  website: 'https://acme.com',
+  updated_at: NOW,
+}
+
 const template = {
   id: 'tpl_1',
   name: 'Welcome',
@@ -228,6 +239,8 @@ const API_RESPONSES: Record<string, unknown> = {
     delivered: true,
     deliveries: [{ endpoint_id: 'wh_1', url: 'https://example.com/hooks', success: true, status: 200 }],
   },
+  get_brand: { brand },
+  update_brand: { brand },
   list_senders: { data: [sender] },
   create_sender: { sender },
   list_tenants: { data: [tenant], ...page },
@@ -386,6 +399,7 @@ const TOOL_ARGS: Record<string, Record<string, unknown>> = {
   create_template: { name: 'Welcome', subject: 'Hi' },
   publish_template: { alias: 'welcome' },
   create_sender: { name: 'Acme Billing', address: 'billing@mail.acme.com' },
+  update_brand: { company_name: 'Acme Inc' },
   send_test_webhook_event: { event: 'email.bounced' },
   import_from_provider: { provider: 'sendgrid', api_key: 'SG.test_key_value', dry_run: true },
   get_import_report: { id: 'mig_1' },
@@ -413,6 +427,7 @@ function toolForRequest(method: string, path: string, body: string | undefined):
     return 'update_tenant'
   }
   if (path.startsWith('/tenants')) return method === 'POST' ? 'create_tenant' : 'list_tenants'
+  if (path.startsWith('/brand')) return method === 'PUT' ? 'update_brand' : 'get_brand'
   if (path.startsWith('/senders')) return method === 'POST' ? 'create_sender' : 'list_senders'
   if (path.startsWith('/migrations')) return method === 'POST' ? 'import_from_provider' : 'get_import_report'
   if (path.startsWith('/test-inbox/wait')) return 'wait_for_test_email'
@@ -530,7 +545,7 @@ describe('tool definitions', () => {
     const { client } = await connect()
     const { tools } = await client.listTools()
     expect(tools.map((tool) => tool.name).sort()).toEqual(MCP_TOOLS.map((tool) => tool.name).sort())
-    expect(tools).toHaveLength(40)
+    expect(tools).toHaveLength(42)
   })
 
   it('gives every tool a description, a title and complete annotations', async () => {

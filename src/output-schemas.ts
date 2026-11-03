@@ -558,6 +558,31 @@ export const listSendersOutput: ObjectSchema = object(
   ['data'],
 )
 
+export const brandOutput: ObjectSchema = object(
+  {
+    brand: described(
+      object(
+        {
+          is_set: boolean('False until anything is set'),
+          settings: described(object({}), 'The look templates follow: any of a template design\'s settings (colors, fonts, button style, globalCss)'),
+          logo: described(
+            object({ url: string('https image URL'), width: { type: ['number', 'null'], description: 'Width in px' }, align: string('left or center') }, ['url', 'align']),
+            'The logo on top of every branded email, or null',
+          ),
+          accent_color: nullableString('The line across the top of every email'),
+          company_name: nullableString('Company name for the footer'),
+          address: nullableString('Mailing address for the footer'),
+          website: nullableString('Website, linked from the logo and the footer'),
+          updated_at: nullableString('When the brand was last changed (ISO 8601)'),
+        },
+        ['is_set', 'settings'],
+      ),
+      'The workspace brand',
+    ),
+  },
+  ['brand'],
+)
+
 export const tenantOutput: ObjectSchema = object({ tenant: described(tenantItem, 'The tenant') }, ['tenant'])
 
 const streamCounts = (description: string): Schema => ({

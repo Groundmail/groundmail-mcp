@@ -139,6 +139,33 @@ describe('callMcpTool', () => {
     expect(params).not.toHaveProperty('from')
   })
 
+  it('get_brand and update_brand call the SDK', async () => {
+    const brand = {
+      get: vi.fn().mockResolvedValue({ brand: { is_set: false, settings: {} } }),
+      update: vi.fn().mockResolvedValue({ brand: { is_set: true, settings: {} } }),
+    }
+    const client = { brand }
+    await callMcpTool(client as never, 'get_brand', {})
+    expect(brand.get).toHaveBeenCalled()
+
+    const empty = await callMcpTool(client as never, 'update_brand', {})
+    expect(empty.isError).toBe(true)
+    expect(brand.update).not.toHaveBeenCalled()
+
+    await callMcpTool(client as never, 'update_brand', {
+      company_name: 'Acme Inc',
+      address: null,
+      logo: { url: 'https://cdn.acme.com/logo.png', align: 'left' },
+      settings: { linkColor: '#2f6feb' },
+    })
+    expect(brand.update).toHaveBeenCalledWith({
+      company_name: 'Acme Inc',
+      address: null,
+      logo: { url: 'https://cdn.acme.com/logo.png', align: 'left' },
+      settings: { linkColor: '#2f6feb' },
+    })
+  })
+
   it('list_senders and create_sender call the SDK', async () => {
     const senders = {
       list: vi.fn().mockResolvedValue({ data: [] }),

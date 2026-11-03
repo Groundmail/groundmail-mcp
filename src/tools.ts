@@ -20,6 +20,7 @@ import {
   emailItem,
   getEmailOutput,
   listSendersOutput,
+  brandOutput,
   migrationOutput,
   okOutput,
   pagedOutput,
@@ -378,6 +379,21 @@ export async function callMcpTool(
             ...(optString(args, 'sender') ? { sender_id: optString(args, 'sender') } : {}),
           }),
         )
+      }
+      case 'get_brand': {
+        return textResult(await client.brand.get())
+      }
+      case 'update_brand': {
+        const params: Record<string, unknown> = {}
+        for (const key of ['accent_color', 'company_name', 'address', 'website'] as const) {
+          if (key in args) params[key] = args[key] === null ? null : optString(args, key)
+        }
+        if ('logo' in args) params.logo = args.logo ?? null
+        if (args.settings && typeof args.settings === 'object' && !Array.isArray(args.settings)) params.settings = args.settings
+        if (!Object.keys(params).length) {
+          return textResult('Nothing to update: pass settings, logo, accent_color, company_name, address or website', true)
+        }
+        return textResult(await client.brand.update(params as Parameters<typeof client.brand.update>[0]))
       }
       case 'list_senders': {
         return textResult(await client.senders.list())
@@ -1123,6 +1139,50 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       readOnlyHint: false,
       destructiveHint: true,
       idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: 'get_brand',
+    description:
+      'Get the workspace brand: the look every template follows unless it overrides a setting (settings: the same keys as a template design\'s settings), the logo on top, the accent line, and the company name, mailing address and website in the footer.',
+    inputSchema: { type: 'object', properties: {} },
+    outputSchema: brandOutput,
+    annotations: readOnly('Get brand'),
+  },
+  {
+    name: 'update_brand',
+    description:
+      'Update the workspace brand. Fields left out keep their value; null clears one. settings replaces the brand\'s look (read it with get_brand first and change what you need). Templates that follow the brand pick it up from their next send.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        settings: {
+          type: 'object',
+          description:
+            'The look, as a template design\'s settings: backgroundColor, contentBackgroundColor, textColor, linkColor, fontFamily, contentWidth, darkMode, globalCss, and theme { buttonBackground, buttonTextColor, buttonRadius, bodyFontSize, lineHeight, headingFontSize }',
+        },
+        logo: {
+          type: ['object', 'null'],
+          description: 'The logo: { url: https image URL, align: left | center, width?: px }. null removes it',
+          properties: {
+            url: { type: 'string', description: 'https image URL (PNG or JPEG show in every mail app)' },
+            align: { type: 'string', enum: ['left', 'center'], description: 'Where the logo sits' },
+            width: { type: 'number', description: 'Width in px, 24 to 552. Default 120' },
+          },
+        },
+        accent_color: { type: ['string', 'null'], description: 'Hex colour of the line across the top, for example #2f6feb' },
+        company_name: { type: ['string', 'null'], description: 'Company name for the footer' },
+        address: { type: ['string', 'null'], description: 'Mailing address for the footer (a PO box is fine)' },
+        website: { type: ['string', 'null'], description: 'Website, for example acme.com' },
+      },
+    },
+    outputSchema: brandOutput,
+    annotations: {
+      title: 'Update brand',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
       openWorldHint: false,
     },
   },
