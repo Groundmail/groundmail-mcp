@@ -221,7 +221,7 @@ export const webhookDeliveryItem: Schema = object(
     recipient: nullableString('The first recipient, or the contact'),
     test: boolean('True for a simulated event'),
     response_status: nullableNumber('HTTP status of the latest attempt'),
-    error_kind: nullableString('Why nothing answered: timeout or connection'),
+    error_kind: nullableString('Why nothing answered: timeout, connection or blocked_destination'),
     latency_ms: nullableNumber('Response time of the latest attempt in ms'),
     last_attempt_at: nullableString('When the latest attempt started (ISO 8601)'),
     next_attempt_at: nullableString('When the next retry runs (ISO 8601)'),
