@@ -1100,7 +1100,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   {
     name: 'validate_email',
     description:
-      'Check one email address with Groundmail validation before accepting it (for example at signup): verdict valid | risky | invalid, reasons, a typo suggestion, and disposable / role flags. Free; sends nothing.',
+      'Check one email address with Groundmail validation before accepting it (for example at signup): verdict valid | risky | invalid, reasons (including likely_bot_signup, a pattern check that can be wrong), a typo suggestion, and disposable / role flags. Free; sends nothing.',
     inputSchema: {
       type: 'object',
       properties: {

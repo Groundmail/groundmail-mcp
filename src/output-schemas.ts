@@ -60,7 +60,7 @@ function heldBackItem(): Schema {
     {
       email: string('The held-back address'),
       reason: string(
-        'Why: invalid_address (cannot exist), no_mail_server (domain takes no email), previously_bounced (hard-bounced for a Groundmail sender in the last 90 days) or mailbox_not_found',
+        'Why: invalid_address (cannot exist), no_mail_server (domain takes no email), previously_bounced (hard-bounced for a Groundmail sender in the last 90 days), mailbox_not_found, or likely_bot_signup (looks like a bot sign-up; only when the send opted in)',
       ),
     },
     ['email', 'reason'],
@@ -341,7 +341,7 @@ export const validateEmailOutput: ObjectSchema = object(
       description: 'valid: safe to send; risky: deliverable but worth a second look; invalid: cannot receive email',
     },
     reasons: stringArray(
-      'What was found: syntax, no_mail_server, mailbox_not_found, previously_bounced (invalid); disposable, catch_all, possible_typo (risky); role (informational)',
+      'What was found: syntax, no_mail_server, mailbox_not_found, previously_bounced (invalid); disposable, catch_all, possible_typo, likely_bot_signup (risky); role (informational)',
     ),
     suggestion: nullableString('The address with a likely-mistyped domain corrected, for example ada@gmail.com for ada@gmial.com'),
     disposable: boolean('A throwaway-inbox service'),
