@@ -802,6 +802,7 @@ const burrowGuardSiteProperties = {
   block_free_webmail: boolean('Turns away personal addresses such as Gmail and Outlook'),
   allow_data_center_ips: boolean('Lets through visitors on hosting and cloud networks'),
   email_checks_only: boolean('No script or token: verify takes the email and runs the address checks only'),
+  watch_only: boolean('Every check runs and is recorded, and verify always answers success'),
   last_check_at: nullableString('When this site last had a check (ISO 8601)'),
   created_at: string('Created at (ISO 8601)'),
 }
@@ -812,6 +813,8 @@ export const burrowGuardSitesOutput: ObjectSchema = object(
   { data: arrayOf(object(burrowGuardSiteProperties, burrowGuardSiteRequired), 'Every BurrowGuard site') },
   ['data'],
 )
+
+export const burrowGuardSiteOutput: ObjectSchema = object(burrowGuardSiteProperties, burrowGuardSiteRequired)
 
 export const burrowGuardSiteCreatedOutput: ObjectSchema = object(
   {
@@ -835,6 +838,7 @@ export const burrowGuardChecksOutput: ObjectSchema = object(
           reason_label: nullableString('The reason in words'),
           ip: nullableString('The visitor IP when the challenge was issued'),
           user_agent: nullableString('The visitor user agent when the challenge was issued'),
+          watch_only: boolean('The site was on watch only: result is what would have happened, and nobody was turned away'),
         },
         ['id', 'site_id', 'created_at', 'result'],
       ),
@@ -847,6 +851,7 @@ export const burrowGuardChecksOutput: ObjectSchema = object(
         checked: number('Checks in the range'),
         passed: number('Passed'),
         blocked: number('Blocked'),
+        would_block: number('Would have been blocked on a watch-only site. Not in blocked'),
         no_token: number('No token: the script did not run and the email checks passed'),
         top_reason: nullableString('The most common block reason'),
       },

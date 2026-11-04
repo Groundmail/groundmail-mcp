@@ -44,6 +44,7 @@ import {
   validateEmailOutput,
   burrowGuardChecksOutput,
   burrowGuardSiteCreatedOutput,
+  burrowGuardSiteOutput,
   burrowGuardSitesOutput,
   verifyDomainOutput,
   webhookDeliveryItem,
@@ -351,15 +352,22 @@ export async function callMcpTool(
             ...(emailOnly ? { email_checks_only: true } : {}),
             ...(typeof args.block_free_webmail === 'boolean' ? { block_free_webmail: args.block_free_webmail } : {}),
             ...(typeof args.allow_data_center_ips === 'boolean' ? { allow_data_center_ips: args.allow_data_center_ips } : {}),
+            ...(typeof args.watch_only === 'boolean' ? { watch_only: args.watch_only } : {}),
           }),
         )
+      }
+      case 'update_burrowguard_site': {
+        const siteId = optString(args, 'id')
+        if (!siteId) return textResult('Missing required argument: id', true)
+        if (typeof args.watch_only !== 'boolean') return textResult('Missing required argument: watch_only', true)
+        return textResult(await client.burrowguard.sites.update(siteId, { watch_only: args.watch_only }))
       }
       case 'list_burrowguard_checks': {
         const checkResult = optString(args, 'result')
         return textResult(
           await client.burrowguard.checks.list({
             ...(optString(args, 'site') ? { site: optString(args, 'site') } : {}),
-            ...(checkResult ? { result: checkResult as 'passed' | 'blocked' | 'no_token' } : {}),
+            ...(checkResult ? { result: checkResult as 'passed' | 'blocked' | 'would_block' | 'no_token' } : {}),
           }),
         )
       }
@@ -1157,6 +1165,10 @@ export const MCP_TOOLS: McpToolDefinition[] = [
           type: 'boolean',
           description: 'For a form already behind a captcha: no script, tag or box, and verify takes just the email. allowed_hostnames can then be left out',
         },
+        watch_only: {
+          type: 'boolean',
+          description: 'Run every check and show what would be blocked, without blocking anyone: verify always answers success. Good for the first week on a live form',
+        },
       },
       required: ['name'],
     },
@@ -1170,14 +1182,39 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
   },
   {
+    name: 'update_burrowguard_site',
+    description:
+      'Turn watch only on or off for a BurrowGuard site. On, every check runs and shows what would be blocked, and nobody is turned away. Off, the site starts blocking.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'The site\'s id' },
+        watch_only: { type: 'boolean', description: 'True to only watch, false to start blocking' },
+      },
+      required: ['id', 'watch_only'],
+    },
+    outputSchema: burrowGuardSiteOutput,
+    annotations: {
+      title: 'Update BurrowGuard site',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
     name: 'list_burrowguard_checks',
     description:
-      'Recent BurrowGuard checks with totals and this month\'s usage: time, email domain, result and reason. The address itself is never stored.',
+      'Recent BurrowGuard checks with totals and this month\'s usage: time, email domain, result and reason. With watch_only true, result is what would have happened and nobody was turned away. The address itself is never stored.',
     inputSchema: {
       type: 'object',
       properties: {
         site: { type: 'string', description: 'Only this site (its id)' },
-        result: { type: 'string', enum: ['passed', 'blocked', 'no_token'], description: 'Only this result' },
+        result: {
+          type: 'string',
+          enum: ['passed', 'blocked', 'would_block', 'no_token'],
+          description: 'Only this result. blocked is real blocks; would_block is the same on a watch-only site',
+        },
       },
     },
     outputSchema: burrowGuardChecksOutput,
