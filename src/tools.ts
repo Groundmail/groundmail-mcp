@@ -42,6 +42,9 @@ import {
   testInboxOutput,
   testWebhookOutput,
   validateEmailOutput,
+  burrowGuardChecksOutput,
+  burrowGuardSiteCreatedOutput,
+  burrowGuardSitesOutput,
   verifyDomainOutput,
   webhookDeliveryItem,
   webhookDeliveryOutput,
@@ -327,6 +330,36 @@ export async function callMcpTool(
             cursor: optString(args, 'cursor'),
             email: optString(args, 'email'),
             ...(optString(args, 'tenant') ? { tenant: optString(args, 'tenant') } : {}),
+          }),
+        )
+      }
+      case 'list_burrowguard_sites': {
+        return textResult(await client.burrowguard.sites.list())
+      }
+      case 'create_burrowguard_site': {
+        const siteName = optString(args, 'name')
+        const hostnames = Array.isArray(args.allowed_hostnames)
+          ? args.allowed_hostnames.filter((host): host is string => typeof host === 'string')
+          : []
+        if (!siteName) return textResult('Missing required argument: name', true)
+        const emailOnly = args.email_checks_only === true
+        if (hostnames.length === 0 && !emailOnly) return textResult('Missing required argument: allowed_hostnames', true)
+        return textResult(
+          await client.burrowguard.sites.create({
+            name: siteName,
+            ...(hostnames.length > 0 ? { allowed_hostnames: hostnames } : {}),
+            ...(emailOnly ? { email_checks_only: true } : {}),
+            ...(typeof args.block_free_webmail === 'boolean' ? { block_free_webmail: args.block_free_webmail } : {}),
+            ...(typeof args.allow_data_center_ips === 'boolean' ? { allow_data_center_ips: args.allow_data_center_ips } : {}),
+          }),
+        )
+      }
+      case 'list_burrowguard_checks': {
+        const checkResult = optString(args, 'result')
+        return textResult(
+          await client.burrowguard.checks.list({
+            ...(optString(args, 'site') ? { site: optString(args, 'site') } : {}),
+            ...(checkResult ? { result: checkResult as 'passed' | 'blocked' | 'no_token' } : {}),
           }),
         )
       }
@@ -1096,6 +1129,59 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
     outputSchema: pagedOutput('data', suppressionItem, 'Suppressed addresses on this page'),
     annotations: readOnly('List suppressions'),
+  },
+  {
+    name: 'list_burrowguard_sites',
+    description:
+      'List BurrowGuard sites: the sign-up and contact forms protected against bots and bad addresses. Shows each public site key, allowed hostnames and options. Secrets are never listed.',
+    inputSchema: { type: 'object', properties: {} },
+    outputSchema: burrowGuardSitesOutput,
+    annotations: readOnly('List BurrowGuard sites'),
+  },
+  {
+    name: 'create_burrowguard_site',
+    description:
+      'Create a BurrowGuard site for a form. Free. Returns the public site_key for the page and the secret, once: write the secret straight to the app\'s environment as GROUNDMAIL_BURROWGUARD_SECRET, never into source code, and do not repeat it in chat. Then add the script and <burrow-guard site-key="..."> beside the email field, and call POST /burrowguard/verify from the server. Install: https://docs.groundmail.dev/burrowguard',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'A label for this form, for example "Sign-up form"' },
+        allowed_hostnames: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Hostnames the form runs on. Include localhost while building. Required unless email_checks_only is true.',
+        },
+        block_free_webmail: { type: 'boolean', description: 'For B2B forms: turn away Gmail, Outlook and other personal addresses' },
+        allow_data_center_ips: { type: 'boolean', description: 'Let through visitors on hosting and cloud networks' },
+        email_checks_only: {
+          type: 'boolean',
+          description: 'For a form already behind a captcha: no script, tag or box, and verify takes just the email. allowed_hostnames can then be left out',
+        },
+      },
+      required: ['name'],
+    },
+    outputSchema: burrowGuardSiteCreatedOutput,
+    annotations: {
+      title: 'Create BurrowGuard site',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: 'list_burrowguard_checks',
+    description:
+      'Recent BurrowGuard checks with totals and this month\'s usage: time, email domain, result and reason. The address itself is never stored.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site: { type: 'string', description: 'Only this site (its id)' },
+        result: { type: 'string', enum: ['passed', 'blocked', 'no_token'], description: 'Only this result' },
+      },
+    },
+    outputSchema: burrowGuardChecksOutput,
+    annotations: readOnly('List BurrowGuard checks'),
   },
   {
     name: 'validate_email',

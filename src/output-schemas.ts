@@ -793,3 +793,74 @@ export const receivedEmailItem: Schema = object(
   },
   ['id', 'from', 'subject'],
 )
+
+const burrowGuardSiteProperties = {
+  id: string('Site id'),
+  name: string('Label for this form'),
+  site_key: string('Public site key (gm_site_…): goes in the page'),
+  allowed_hostnames: stringArray('Hostnames the form runs on'),
+  block_free_webmail: boolean('Turns away personal addresses such as Gmail and Outlook'),
+  allow_data_center_ips: boolean('Lets through visitors on hosting and cloud networks'),
+  email_checks_only: boolean('No script or token: verify takes the email and runs the address checks only'),
+  last_check_at: nullableString('When this site last had a check (ISO 8601)'),
+  created_at: string('Created at (ISO 8601)'),
+}
+
+const burrowGuardSiteRequired = ['id', 'name', 'site_key', 'allowed_hostnames']
+
+export const burrowGuardSitesOutput: ObjectSchema = object(
+  { data: arrayOf(object(burrowGuardSiteProperties, burrowGuardSiteRequired), 'Every BurrowGuard site') },
+  ['data'],
+)
+
+export const burrowGuardSiteCreatedOutput: ObjectSchema = object(
+  {
+    ...burrowGuardSiteProperties,
+    secret: string('Site secret (gm_bg_…), returned once. Put it in the app environment as GROUNDMAIL_BURROWGUARD_SECRET'),
+  },
+  [...burrowGuardSiteRequired, 'secret'],
+)
+
+export const burrowGuardChecksOutput: ObjectSchema = object(
+  {
+    data: arrayOf(
+      object(
+        {
+          id: string('Check id'),
+          site_id: string('Site id'),
+          created_at: string('When (ISO 8601)'),
+          email_domain: nullableString('The address domain. The address itself is never stored'),
+          result: string('passed, blocked or no_token'),
+          reason: nullableString('Why it did not pass'),
+          reason_label: nullableString('The reason in words'),
+          ip: nullableString('The visitor IP when the challenge was issued'),
+          user_agent: nullableString('The visitor user agent when the challenge was issued'),
+        },
+        ['id', 'site_id', 'created_at', 'result'],
+      ),
+      'Recent checks, newest first',
+    ),
+    has_more: boolean('More checks after this page'),
+    next_cursor: nullableString('Cursor for the next page'),
+    stats: described(object(
+      {
+        checked: number('Checks in the range'),
+        passed: number('Passed'),
+        blocked: number('Blocked'),
+        no_token: number('No token: the script did not run and the email checks passed'),
+        top_reason: nullableString('The most common block reason'),
+      },
+      ['checked', 'passed', 'blocked'],
+    ), 'Totals for the range'),
+    usage: described(object(
+      {
+        month: string('Month, YYYY-MM'),
+        used: number('Checks this month'),
+        limit: number('Free checks a month'),
+        limited: boolean('Over the limit: sign-ups pass unchecked until next month'),
+      },
+      ['month', 'used', 'limit', 'limited'],
+    ), 'Free checks used this month'),
+  },
+  ['data'],
+)

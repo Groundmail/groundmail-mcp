@@ -225,6 +225,19 @@ const API_RESPONSES: Record<string, unknown> = {
     ...page,
   },
   remove_category_opt_out: { ok: true, deleted: 1 },
+  list_burrowguard_sites: {
+    data: [{ id: 's1', name: 'Sign-up', site_key: 'gm_site_0123', allowed_hostnames: ['localhost'] }],
+  },
+  create_burrowguard_site: {
+    id: 's1',
+    name: 'Sign-up',
+    site_key: 'gm_site_0123',
+    allowed_hostnames: ['localhost'],
+    secret: 'gm_bg_0123',
+  },
+  list_burrowguard_checks: {
+    data: [{ id: 'c1', site_id: 's1', created_at: '2026-11-03T00:00:00Z', result: 'blocked' }],
+  },
   validate_email: {
     email: 'ada@gmial.com',
     domain: 'gmial.com',
@@ -405,6 +418,7 @@ const TOOL_ARGS: Record<string, Record<string, unknown>> = {
   remove_suppression: { email: 'a@example.com' },
   remove_category_opt_out: { email: 'a@example.com', category: 'newsletter', tenant: 'acme' },
   validate_email: { email: 'ada@gmial.com' },
+  create_burrowguard_site: { name: 'Sign-up', allowed_hostnames: ['localhost'] },
   get_template: { alias: 'welcome' },
   create_template: { name: 'Welcome', subject: 'Hi' },
   publish_template: { alias: 'welcome' },
@@ -451,6 +465,8 @@ function toolForRequest(method: string, path: string, body: string | undefined):
   if (path.startsWith('/emails')) return method === 'POST' ? 'send_email' : 'list_emails'
   if (path.startsWith('/deliverability')) return 'get_deliverability'
   if (path.startsWith('/validate')) return 'validate_email'
+  if (path.startsWith('/burrowguard/checks')) return 'list_burrowguard_checks'
+  if (path.startsWith('/burrowguard/sites')) return method === 'POST' ? 'create_burrowguard_site' : 'list_burrowguard_sites'
   if (path.endsWith('/dmarc')) return method === 'POST' ? 'enable_dmarc_monitoring' : 'get_dmarc_report'
   if (path.startsWith('/domains/')) return action === 'apply' ? 'apply_domain_dns' : 'verify_domain'
   if (path.startsWith('/domains')) return method === 'POST' ? 'create_domain' : 'list_domains'
@@ -559,7 +575,7 @@ describe('tool definitions', () => {
     const { client } = await connect()
     const { tools } = await client.listTools()
     expect(tools.map((tool) => tool.name).sort()).toEqual(MCP_TOOLS.map((tool) => tool.name).sort())
-    expect(tools).toHaveLength(47)
+    expect(tools).toHaveLength(50)
   })
 
   it('gives every tool a description, a title and complete annotations', async () => {
