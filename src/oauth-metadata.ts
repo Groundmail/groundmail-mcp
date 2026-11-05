@@ -31,6 +31,9 @@ export const MCP_SCOPES_SUPPORTED = [
   'templates:write',
   'suppressions:write',
   'account:read',
+  'mailboxes:read',
+  'mailboxes:write',
+  'mailboxes:send',
   'openid',
   'email',
 ] as const

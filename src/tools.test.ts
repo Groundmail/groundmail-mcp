@@ -342,6 +342,20 @@ describe('callMcpTool', () => {
     expect((await callMcpTool(client as never, 'wait_for_test_email', {})).isError).toBe(true)
   })
 
+  it('create_webhook passes the mailbox filter', async () => {
+    const client = mockClient()
+    await callMcpTool(client as never, 'create_webhook', {
+      url: 'https://example.com/hook',
+      events: ['mailbox.message.received'],
+      mailboxes: ['mbx_1'],
+    })
+    expect(client.webhooks.create).toHaveBeenCalledWith({
+      url: 'https://example.com/hook',
+      events: ['mailbox.message.received'],
+      mailboxes: ['mbx_1'],
+    })
+  })
+
   it('webhook tools call the SDK', async () => {
     const client = mockClient()
     await callMcpTool(client as never, 'list_webhooks', {})

@@ -445,11 +445,136 @@ const TOOL_ARGS: Record<string, Record<string, unknown>> = {
   enable_dmarc_monitoring: { domain: 'example.com' },
   get_test_email: { id: 'tie_1' },
   wait_for_test_email: { to: 'signup-x@acme.test.groundmail.dev', timeout: 5 },
+  list_mailbox_threads: { mailbox: 'mbx_1' },
+  get_mailbox_thread: { mailbox: 'mbx_1', thread_id: 'thd_1' },
+  label_mailbox_thread: { mailbox: 'mbx_1', thread_id: 'thd_1', labels: ['done'] },
+  search_mailbox_messages: { mailbox: 'mbx_1', q: 'code' },
+  get_mailbox_message: { mailbox: 'mbx_1', message_id: 'mbm_1' },
+  wait_for_mailbox_message: { mailbox: 'mbx_1', timeout: 5 },
+  get_mailbox_attachment: { mailbox: 'mbx_1', message_id: 'mbm_1', attachment_id: 'att_1' },
+  delete_mailbox: { mailbox: 'mbx_1' },
+  forward_mailbox: { mailbox: 'mbx_1', to: 'bot@agents.acme.dev' },
+  send_mailbox_message: { mailbox: 'mbx_1', to: 'ada@example.com', subject: 'Hello', text: 'Hi' },
+  reply_to_mailbox_message: { mailbox: 'mbx_1', message_id: 'mbm_1', text: 'Thanks' },
 }
+
+const mailbox = {
+  object: 'mailbox',
+  id: 'mbx_1',
+  address: 'signup-bot@agents.groundmailbox.com',
+  local_part: 'signup-bot',
+  domain: 'agents.groundmailbox.com',
+  hosted: true,
+  display_name: null,
+  external_id: null,
+  status: 'active',
+  send_policy: 'reply_only',
+  daily_send_limit: null,
+  paused_reason: null,
+  forwarding: null,
+  spam_threshold: null,
+  retention_days: null,
+  metadata: null,
+  created_at: NOW,
+  updated_at: NOW,
+}
+const mailboxThread = {
+  object: 'mailbox_thread',
+  id: 'thd_1',
+  mailbox_id: 'mbx_1',
+  subject: 'Your code',
+  participants: ['no-reply@acme.com'],
+  labels: [],
+  message_count: 1,
+  unread_count: 1,
+  snippet: 'Your code is 482913',
+  archived: false,
+  held: false,
+  last_message_at: NOW,
+  last_inbound_at: NOW,
+  last_outbound_at: null,
+  created_at: NOW,
+  untrusted: true,
+}
+const mailboxMessage = {
+  object: 'mailbox_message',
+  id: 'mbm_1',
+  mailbox_id: 'mbx_1',
+  thread_id: 'thd_1',
+  direction: 'inbound',
+  from: 'no-reply@acme.com',
+  from_name: 'Acme',
+  to: ['signup-bot@agents.groundmailbox.com'],
+  cc: [],
+  reply_to: null,
+  plus_tag: null,
+  subject: 'Your code',
+  snippet: 'Your code is 482913',
+  code: '482913',
+  links: ['https://acme.com/verify'],
+  labels: [],
+  read: false,
+  spam_status: 'clean',
+  spam_score: 0.4,
+  held: false,
+  sender_verified: true,
+  authentication: { spf: 'pass', dkim: 'pass', dmarc: 'pass' },
+  hidden_text_removed: false,
+  prompt_injection: { flagged: false, signals: [] },
+  auto_submitted: false,
+  size: 2048,
+  attachments: [],
+  received_at: NOW,
+  expires_at: null,
+  untrusted: true,
+  visible_text: 'Your code is 482913',
+  reply_text: 'Your code is 482913',
+  text: 'Your code is 482913',
+  html: null,
+}
+API_RESPONSES.create_mailbox = { mailbox }
+API_RESPONSES.list_mailboxes = { data: [mailbox], has_more: false, next_cursor: null }
+API_RESPONSES.delete_mailbox = { deleted: true, id: 'mbx_1' }
+API_RESPONSES.forward_mailbox = {
+  mailbox: { ...mailbox, status: 'forwarding', forwarding: { to: 'bot@agents.acme.dev', until: NOW, active: true } },
+}
+API_RESPONSES.list_mailbox_threads = { data: [mailboxThread], has_more: false, next_cursor: null }
+API_RESPONSES.get_mailbox_thread = { thread: { ...mailboxThread, messages: [mailboxMessage] } }
+API_RESPONSES.label_mailbox_thread = { thread: mailboxThread }
+API_RESPONSES.search_mailbox_messages = { data: [mailboxMessage], has_more: false, next_cursor: null }
+API_RESPONSES.get_mailbox_message = { message: mailboxMessage }
+API_RESPONSES.wait_for_mailbox_message = { message: mailboxMessage }
+const mailboxSend = { object: 'mailbox_send', message_id: 'mbm_2', thread_id: 'thd_1', email_id: 'msg_1', status: 'queued' }
+API_RESPONSES.send_mailbox_message = mailboxSend
+API_RESPONSES.reply_to_mailbox_message = mailboxSend
+
+/** These tools don't echo the API: what the sender wrote moves into a delimited block. */
+const WRAPPED_TOOLS = new Set([
+  'list_mailbox_threads',
+  'get_mailbox_thread',
+  'label_mailbox_thread',
+  'search_mailbox_messages',
+  'get_mailbox_message',
+  'wait_for_mailbox_message',
+  'get_mailbox_attachment',
+])
 
 /** Which tool a request belongs to, by method and path. */
 function toolForRequest(method: string, path: string, body: string | undefined): string {
   const action = body ? (JSON.parse(body) as { action?: string }).action : undefined
+  if (path.startsWith('/mailboxes/')) {
+    if (path.includes('/attachments/')) return 'get_mailbox_attachment'
+    if (path.endsWith('/forward')) return 'forward_mailbox'
+    if (path.endsWith('/reply')) return 'reply_to_mailbox_message'
+    if (method === 'POST' && path.endsWith('/messages')) return 'send_mailbox_message'
+    if (path.includes('/wait')) return 'wait_for_mailbox_message'
+    if (path.includes('/threads/')) return method === 'PATCH' ? 'label_mailbox_thread' : 'get_mailbox_thread'
+    if (path.includes('/threads')) return 'list_mailbox_threads'
+    if (path.includes('/messages/')) return 'get_mailbox_message'
+    if (path.includes('/messages')) return 'search_mailbox_messages'
+    return 'delete_mailbox'
+  }
+  if (path.startsWith('/mailboxes')) return method === 'POST' ? 'create_mailbox' : 'list_mailboxes'
   if (path.startsWith('/tenants/')) {
     if (path.includes('/stats')) return 'get_tenant_stats'
     if (method === 'GET') return 'get_tenant'
@@ -512,6 +637,11 @@ beforeEach(() => {
     vi.fn(async (url: string, init: RequestInit) => {
       const path = new URL(url).pathname + new URL(url).search
       const tool = toolForRequest(init.method ?? 'GET', path, init.body as string | undefined)
+      if (tool === 'get_mailbox_attachment') {
+        return new Response('Hello', {
+          headers: { 'content-type': 'text/plain', 'content-disposition': 'attachment; filename="notes.txt"' },
+        })
+      }
       return new Response(JSON.stringify(API_RESPONSES[tool]), {
         status: 200,
         headers: { 'content-type': 'application/json' },
@@ -586,7 +716,7 @@ describe('tool definitions', () => {
     const { client } = await connect()
     const { tools } = await client.listTools()
     expect(tools.map((tool) => tool.name).sort()).toEqual(MCP_TOOLS.map((tool) => tool.name).sort())
-    expect(tools).toHaveLength(51)
+    expect(tools).toHaveLength(64)
   })
 
   it('gives every tool a description, a title and complete annotations', async () => {
@@ -630,7 +760,7 @@ describe('tool definitions', () => {
   it('marks read tools read-only and destructive tools destructive', () => {
     const byName = new Map(MCP_TOOLS.map((tool) => [tool.name, tool.annotations]))
     for (const [name, hints] of byName) {
-      if (/^(list|get|validate|wait_for)_/.test(name)) {
+      if (/^(list|get|search|validate|wait_for)_/.test(name)) {
         expect(hints, name).toMatchObject({ readOnlyHint: true, destructiveHint: false, idempotentHint: true })
       } else {
         expect(hints.readOnlyHint, name).toBe(false)
@@ -641,15 +771,17 @@ describe('tool definitions', () => {
       'add_suppression',
       'apply_domain_dns',
       'cancel_batch',
+      'delete_mailbox',
       'delete_webhook',
       'enable_dmarc_monitoring',
+      'forward_mailbox',
       'pause_tenant',
       'publish_template',
       'remove_category_opt_out',
       'remove_suppression',
       'update_tenant',
     ])
-    for (const name of ['send_email', 'send_test_webhook_event']) {
+    for (const name of ['send_email', 'send_test_webhook_event', 'send_mailbox_message', 'reply_to_mailbox_message']) {
       expect(byName.get(name), name).toMatchObject({
         readOnlyHint: false,
         idempotentHint: false,
@@ -667,8 +799,12 @@ describe('structured results', () => {
     for (const tool of tools) {
       const result = await client.callTool({ name: tool.name, arguments: TOOL_ARGS[tool.name] ?? {} })
       expect(result.isError, `${tool.name}: ${JSON.stringify(result.content)}`).toBeFalsy()
-      expect(result.structuredContent, tool.name).toEqual(API_RESPONSES[tool.name])
       const text = (result.content as Array<{ type: string; text: string }>)[0]?.text ?? ''
+      if (WRAPPED_TOOLS.has(tool.name)) {
+        expect(JSON.parse(text), tool.name).toEqual(result.structuredContent)
+        continue
+      }
+      expect(result.structuredContent, tool.name).toEqual(API_RESPONSES[tool.name])
       expect(JSON.parse(text), tool.name).toEqual(API_RESPONSES[tool.name])
     }
   })
