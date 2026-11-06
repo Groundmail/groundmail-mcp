@@ -10,7 +10,7 @@ export const MCP_SERVER_VERSION = '0.29.1'
 
 /** Sent to clients on initialize; agents read it before calling tools. */
 export const MCP_SERVER_INSTRUCTIONS = [
-  'Groundmail sends transactional email from domains the user has verified.',
+  'Groundmail sends and receives email for apps and AI agents, from domains the user has verified.',
   'To test before a domain is verified, call send_email with from "noreply@mail.groundmail.dev" and to set to the Groundmail account email; sandbox sends to any other address are rejected.',
   'Sending to other recipients needs a verified domain (list_domains, create_domain, apply_domain_dns, verify_domain) and billing set up by the user in the Groundmail dashboard at https://app.groundmail.dev/settings/billing (no charge on the Free plan).',
   'Confirm with the user before sending email to anyone other than themselves.',

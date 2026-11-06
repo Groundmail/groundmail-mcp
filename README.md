@@ -10,7 +10,7 @@
 <h1 align="center">Groundmail MCP server</h1>
 
 <p align="center">
-  Send email and manage domains, templates, webhooks and suppressions<br>
+  Send transactional email and manage domains, templates, webhooks and suppressions<br>
   from Claude, Claude Code, ChatGPT, Cursor and any other MCP client.
 </p>
 
@@ -133,8 +133,8 @@ Want your coding agent to know Groundmail too? Install the [agent skills](https:
 
 ## Why Groundmail
 
-- **Separate streams.** Your sign-in codes never wait behind a newsletter.
-- **We run the servers.** Our own mail servers and IP space, so we can see and fix delivery problems ourselves.
+- **Our own mail servers and IP space.** Your password resets and receipts don't share a pool with bulk marketing senders.
+- **Transactional email only.** No newsletters or cold outreach on the platform, which keeps the sending reputation clean.
 - **Start free.** Free covers 3,000 emails a month. After that, pay as you go is $15 a month with 20,000 emails included, then from $0.70 per 1,000, less as you grow. [Pricing](https://groundmail.dev/pricing/?utm_source=github&utm_medium=readme&utm_campaign=groundmail-mcp)
 - **Built for code and for agents.** REST API, SMTP, SDKs for Node, Python, Go, PHP and Ruby, a CLI, and an MCP server for Claude, ChatGPT and Cursor.
 

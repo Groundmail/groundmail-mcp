@@ -1,8 +1,8 @@
 {
   "name": "groundmail-mcp",
-  "version": "0.29.3",
+  "version": "0.29.4",
   "mcpName": "io.github.Groundmail/groundmail",
-  "description": "Groundmail MCP server: send transactional email, manage domains, templates, webhooks and suppressions from Claude, Cursor, ChatGPT and other MCP clients",
+  "description": "Groundmail MCP server: send and receive email, give agents mailboxes, manage domains, templates, webhooks and suppressions from Claude, Cursor, ChatGPT and other MCP clients",
   "license": "MIT",
   "type": "module",
   "bin": {
@@ -41,7 +41,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
-    "groundmail": "0.48.0"
+    "groundmail": "0.48.1"
   },
   "devDependencies": {
     "tsup": "^8.5.0",

@@ -2,19 +2,19 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.Groundmail/groundmail",
   "title": "Groundmail",
-  "description": "Send transactional email and manage domains, templates, webhooks and suppressions with Groundmail.",
+  "description": "Send and receive email, give agents mailboxes, and manage domains and templates with Groundmail.",
   "websiteUrl": "https://docs.groundmail.dev/ai/mcp",
   "repository": {
     "url": "https://github.com/Groundmail/groundmail-mcp",
     "source": "github"
   },
-  "version": "0.29.3",
+  "version": "0.29.4",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "groundmail-mcp",
-      "version": "0.29.3",
+      "version": "0.29.4",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"
