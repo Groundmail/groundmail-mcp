@@ -883,6 +883,7 @@ export const mailboxItem: Schema = object(
     external_id: nullableString('Your own id for this mailbox'),
     status: string('active, paused or forwarding'),
     send_policy: string('reply_only on hosted addresses, which cannot email anyone first; first_contact on your own domain'),
+    send_as: nullableString('The address mail goes out from, when it is not address; null sends as address'),
     daily_send_limit: nullableNumber('Most emails a day from this mailbox; null for no limit of its own'),
     paused_reason: nullableString('Why it is paused, by you or automatically; null while active. A paused mailbox still receives mail'),
     forwarding: {
