@@ -14,13 +14,15 @@ vi.mock('./oauth-resolve.js', () => ({
 }))
 
 vi.mock('@modelcontextprotocol/sdk/server/streamableHttp.js', () => ({
-  StreamableHTTPServerTransport: vi.fn().mockImplementation(() => ({
-    handleRequest: vi.fn().mockImplementation(async (_req: IncomingMessage, res) => {
-      res.writeHead(200, { 'content-type': 'application/json' })
-      res.end(JSON.stringify({ ok: true }))
-    }),
-    close: vi.fn().mockResolvedValue(undefined),
-  })),
+  StreamableHTTPServerTransport: vi.fn().mockImplementation(function () {
+    return {
+      handleRequest: vi.fn().mockImplementation(async (_req: IncomingMessage, res) => {
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ ok: true }))
+      }),
+      close: vi.fn().mockResolvedValue(undefined),
+    }
+  }),
 }))
 
 const API_KEY = `gm_${'a'.repeat(48)}`

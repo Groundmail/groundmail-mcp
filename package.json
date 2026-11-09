@@ -1,6 +1,6 @@
 {
   "name": "groundmail-mcp",
-  "version": "0.29.4",
+  "version": "0.29.5",
   "mcpName": "io.github.Groundmail/groundmail",
   "description": "Groundmail MCP server: send and receive email, give agents mailboxes, manage domains, templates, webhooks and suppressions from Claude, Cursor, ChatGPT and other MCP clients",
   "license": "MIT",
@@ -46,7 +46,7 @@
   "devDependencies": {
     "tsup": "^8.5.0",
     "typescript": "^5",
-    "vitest": "^3.2.4",
+    "vitest": "^5.1.0",
     "@types/node": "^20"
   },
   "bugs": {
