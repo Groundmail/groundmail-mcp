@@ -87,6 +87,19 @@ describe('callMcpTool', () => {
     expect(missing.isError).toBe(true)
     expect(JSON.stringify(missing.content)).toContain('aws_region')
     expect(run).toHaveBeenCalledTimes(2)
+
+    await callMcpTool(client as never, 'import_from_provider', {
+      provider: 'azure',
+      azure_subscription_id: 'f4adabe6-ac2c-4f75-8133-7ee0dab92c28',
+      api_key: 'ignored',
+      dry_run: true,
+    })
+    expect(run).toHaveBeenLastCalledWith({ provider: 'azure', azure_subscription_id: 'f4adabe6-ac2c-4f75-8133-7ee0dab92c28', dry_run: true })
+    const noSubscription = await callMcpTool(client as never, 'import_from_provider', { provider: 'azure' })
+    expect(noSubscription.isError).toBe(true)
+    expect(JSON.stringify(noSubscription.content)).toContain('azure_subscription_id')
+    expect(JSON.stringify(noSubscription.content)).toContain('Connect Azure')
+    expect(run).toHaveBeenCalledTimes(3)
   })
 
   it('send_email calls the SDK', async () => {

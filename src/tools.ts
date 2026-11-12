@@ -640,8 +640,15 @@ export async function callMcpTool(
       }
       case 'import_from_provider': {
         const provider = optString(args, 'provider')
-        if (provider !== 'sendgrid' && provider !== 'postmark' && provider !== 'mailgun' && provider !== 'resend' && provider !== 'ses') {
-          return textResult('Missing or unknown provider: use sendgrid, postmark, mailgun, resend or ses', true)
+        if (
+          provider !== 'sendgrid' &&
+          provider !== 'postmark' &&
+          provider !== 'mailgun' &&
+          provider !== 'resend' &&
+          provider !== 'ses' &&
+          provider !== 'azure'
+        ) {
+          return textResult('Missing or unknown provider: use sendgrid, postmark, mailgun, resend, ses or azure', true)
         }
         const resources = optStringArray(args, 'resources')
         const cursor = optString(args, 'cursor')
@@ -670,6 +677,16 @@ export async function callMcpTool(
             aws_region: awsRegion,
             ...common,
           }
+        } else if (provider === 'azure') {
+          const subscriptionId = optString(args, 'azure_subscription_id')
+          if (!subscriptionId) {
+            return textResult(
+              'Azure Communication Services needs azure_subscription_id (the Azure subscription that holds the Email Communication Service). No key is needed: the workspace must have connected its Microsoft Entra tenant (dashboard → API keys → New credential → Azure managed identity → Connect Azure) and given the Groundmail app the Reader role on the resource group: https://docs.groundmail.dev/migration/azure-communication-services',
+              true,
+            )
+          }
+          const tenantId = optString(args, 'azure_tenant_id')
+          params = { provider, azure_subscription_id: subscriptionId, ...(tenantId ? { azure_tenant_id: tenantId } : {}), ...common }
         } else {
           const apiKey = optString(args, 'api_key')
           if (!apiKey) return textResult('Missing required argument: api_key (the key of the account to import from)', true)
@@ -1907,15 +1924,19 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   {
     name: 'import_from_provider',
     description:
-      'Beta. Import templates, suppressions (bounces, complaints, unsubscribes), sending domains and webhooks from SendGrid, Postmark, Mailgun, Resend or Amazon SES into Groundmail. Ask the user for their provider API key (Resend: a Full access key; Amazon SES: an access key with the read-only import policy, and the region); it is used for this import only and never stored, so do not write it to a file. Run with dry_run first to show the user what will be imported. Imported webhooks start disabled; Amazon SES has no webhooks, so its configuration sets are reported in the notes instead. Templates that use logic Groundmail does not convert are imported as drafts. The result includes what needs attention, the code change, and a prompt for making it.',
+      'Beta. Import templates, suppressions (bounces, complaints, unsubscribes), sending domains and webhooks from SendGrid, Postmark, Mailgun, Resend, Amazon SES or Azure Communication Services into Groundmail. Ask the user for their provider API key (Resend: a Full access key; Amazon SES: an access key with the read-only import policy, and the region); it is used for this import only and never stored, so do not write it to a file. Azure Communication Services takes no key: ask for the Azure subscription ID, and the workspace must already have connected its Microsoft Entra tenant and given the Groundmail app the Reader role; it has no stored templates, so only domains, suppression lists and Event Grid webhooks come across. Run with dry_run first to show the user what will be imported. Imported webhooks start disabled; Amazon SES has no webhooks, so its configuration sets are reported in the notes instead. Templates that use logic Groundmail does not convert are imported as drafts. The result includes what needs attention, the code change, and a prompt for making it.',
     inputSchema: {
       type: 'object',
       properties: {
-        provider: { type: 'string', enum: ['sendgrid', 'postmark', 'mailgun', 'resend', 'ses'], description: 'Provider to import from (ses = Amazon SES)' },
+        provider: {
+          type: 'string',
+          enum: ['sendgrid', 'postmark', 'mailgun', 'resend', 'ses', 'azure'],
+          description: 'Provider to import from (ses = Amazon SES, azure = Azure Communication Services)',
+        },
         api_key: {
           type: 'string',
           description:
-            'Not for ses. SendGrid API key, Postmark server API token, Mailgun private API key (read access is enough), or a Resend API key with Full access',
+            'Not for ses or azure. SendGrid API key, Postmark server API token, Mailgun private API key (read access is enough), or a Resend API key with Full access',
         },
         account_api_key: { type: 'string', description: 'Postmark only: account API token, needed to import sending domains' },
         region: { type: 'string', enum: ['us', 'eu'], description: 'SendGrid and Mailgun: eu for EU-region accounts (default us)' },
@@ -1923,6 +1944,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         aws_secret_access_key: { type: 'string', description: 'Amazon SES only: the secret access key' },
         aws_session_token: { type: 'string', description: 'Amazon SES only, temporary credentials: the session token' },
         aws_region: { type: 'string', description: 'Amazon SES only: the region to import, such as us-east-1. One region per import' },
+        azure_subscription_id: { type: 'string', description: 'Azure Communication Services only: the Azure subscription ID (a GUID) that holds the Email Communication Service' },
+        azure_tenant_id: { type: 'string', description: 'Azure Communication Services only, and only when the workspace has connected more than one Microsoft Entra tenant: which one to read' },
         resources: {
           type: 'array',
           items: { type: 'string', enum: ['domains', 'webhooks', 'templates', 'suppressions'] },
@@ -1946,7 +1969,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   {
     name: 'get_import_report',
     description:
-      'Beta. The stored report of an import from SendGrid, Postmark, Mailgun, Resend or Amazon SES: what was imported, skipped and failed, the DNS changes per domain, what still needs doing, the code change and a prompt for it. Pass the import id, or omit it for the latest import. Previews are not stored.',
+      'Beta. The stored report of an import from SendGrid, Postmark, Mailgun, Resend, Amazon SES or Azure Communication Services: what was imported, skipped and failed, the DNS changes per domain, what still needs doing, the code change and a prompt for it. Pass the import id, or omit it for the latest import. Previews are not stored.',
     inputSchema: {
       type: 'object',
       properties: {
