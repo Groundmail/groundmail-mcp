@@ -629,7 +629,7 @@ export const brandOutput: ObjectSchema = object(
           is_set: boolean('False until anything is set'),
           settings: described(object({}), 'The look templates follow: any of a template design\'s settings (colors, fonts, button style, globalCss)'),
           logo: described(
-            object({ url: string('https image URL'), width: { type: ['number', 'null'], description: 'Width in px' }, align: string('left or center') }, ['url', 'align']),
+            object({ url: string('https image URL'), width: { type: ['number', 'null'], description: 'Width in px' }, align: string('left or center'), show_name: boolean('Whether company_name is drawn beside the logo') }, ['url', 'align']),
             'The logo on top of every branded email, or null',
           ),
           accent_color: nullableString('The line across the top of every email'),

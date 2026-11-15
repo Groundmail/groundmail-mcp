@@ -1665,11 +1665,12 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         },
         logo: {
           type: ['object', 'null'],
-          description: 'The logo: { url: https image URL, align: left | center, width?: px }. null removes it',
+          description: 'The logo: { url: https image URL, align: left | center, width?: px, show_name?: boolean }. null removes it',
           properties: {
             url: { type: 'string', description: 'https image URL (PNG or JPEG show in every mail app)' },
             align: { type: 'string', enum: ['left', 'center'], description: 'Where the logo sits' },
-            width: { type: 'number', description: 'Width in px, 24 to 552. Default 120' },
+            width: { type: 'number', description: 'Width in px, 24 to 552. Default 120, or 32 with show_name' },
+            show_name: { type: 'boolean', description: 'Draw company_name as text beside the logo (a mark with the name next to it). Default false' },
           },
         },
         accent_color: { type: ['string', 'null'], description: 'Hex colour of the line across the top, for example #2f6feb' },
