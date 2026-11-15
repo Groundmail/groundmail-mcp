@@ -1684,7 +1684,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     annotations: {
       title: 'Update brand',
       readOnlyHint: false,
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: true,
       openWorldHint: false,
     },
@@ -2055,7 +2055,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     annotations: {
       title: 'Create mailbox',
       readOnlyHint: false,
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
     },
@@ -2130,7 +2130,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     annotations: {
       title: 'Label mailbox thread',
       readOnlyHint: false,
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: true,
       openWorldHint: false,
     },

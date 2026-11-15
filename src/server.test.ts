@@ -800,14 +800,17 @@ describe('tool definitions', () => {
       'add_suppression',
       'apply_domain_dns',
       'cancel_batch',
+      'create_mailbox',
       'delete_mailbox',
       'delete_webhook',
       'enable_dmarc_monitoring',
       'forward_mailbox',
+      'label_mailbox_thread',
       'pause_tenant',
       'publish_template',
       'remove_category_opt_out',
       'remove_suppression',
+      'update_brand',
       'update_tenant',
     ])
     for (const name of ['send_email', 'send_test_webhook_event', 'send_mailbox_message', 'reply_to_mailbox_message']) {
