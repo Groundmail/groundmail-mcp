@@ -735,6 +735,35 @@ describe('tool definitions', () => {
     }
   })
 
+  // Directory review (Claude, ChatGPT) bars instructions about model behavior or other tools in
+  // tool descriptions. Guidance for the agent goes in MCP_SERVER_INSTRUCTIONS instead.
+  it('keeps tool and parameter descriptions free of agent instructions and other tool names', async () => {
+    const { client } = await connect()
+    const { tools } = await client.listTools()
+    const names = MCP_TOOLS.map((tool) => tool.name)
+    const instruction = /\b(confirm with the user|ask the user|do not|don't|never ask|call again|then call|use it to|use this to|use only)\b/i
+    const texts: Array<[string, string]> = []
+    const walk = (where: string, schema: unknown) => {
+      if (!schema || typeof schema !== 'object') return
+      const node = schema as { description?: unknown; properties?: Record<string, unknown>; items?: unknown }
+      if (typeof node.description === 'string') texts.push([where, node.description])
+      for (const [key, value] of Object.entries(node.properties ?? {})) walk(`${where}.${key}`, value)
+      if (node.items) walk(`${where}[]`, node.items)
+    }
+    for (const tool of tools) {
+      texts.push([tool.name, tool.description ?? ''])
+      walk(tool.name, tool.inputSchema)
+    }
+    for (const [where, text] of texts) {
+      expect(text, `${where} gives an instruction`).not.toMatch(instruction)
+      const own = where.split(/[.[]/)[0]
+      for (const name of names) {
+        if (name === own) continue
+        expect(text, `${where} names ${name}`).not.toMatch(new RegExp(`\\b${name}\\b`))
+      }
+    }
+  })
+
   it('gives every tool an object outputSchema', async () => {
     const { client } = await connect()
     const { tools } = await client.listTools()
