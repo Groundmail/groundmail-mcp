@@ -254,6 +254,17 @@ const API_RESPONSES: Record<string, unknown> = {
     disposable: false,
     role: false,
   },
+  verify_email: {
+    email: 'ada@acme.com',
+    domain: 'acme.com',
+    verdict: 'valid',
+    reasons: [],
+    suggestion: null,
+    disposable: false,
+    role: false,
+    mailbox: 'exists',
+    billed: true,
+  },
   list_templates: { data: [template], ...page },
   get_template: { template },
   create_template: { template },
@@ -425,6 +436,7 @@ const TOOL_ARGS: Record<string, Record<string, unknown>> = {
   remove_suppression: { email: 'a@example.com' },
   remove_category_opt_out: { email: 'a@example.com', category: 'newsletter', tenant: 'acme' },
   validate_email: { email: 'ada@gmial.com' },
+  verify_email: { email: 'ada@acme.com' },
   create_burrowguard_site: { name: 'Sign-up', allowed_hostnames: ['localhost'] },
   update_burrowguard_site: { id: 's1', watch_only: false },
   get_template: { alias: 'welcome' },
@@ -597,7 +609,7 @@ function toolForRequest(method: string, path: string, body: string | undefined):
   if (path.startsWith('/emails/')) return 'get_email'
   if (path.startsWith('/emails')) return method === 'POST' ? 'send_email' : 'list_emails'
   if (path.startsWith('/deliverability')) return 'get_deliverability'
-  if (path.startsWith('/validate')) return 'validate_email'
+  if (path.startsWith('/validate')) return body && (JSON.parse(body) as { mailbox_check?: boolean }).mailbox_check ? 'verify_email' : 'validate_email'
   if (path.startsWith('/burrowguard/checks')) return 'list_burrowguard_checks'
   if (path.startsWith('/burrowguard/sites')) {
     if (method === 'PATCH') return 'update_burrowguard_site'
@@ -716,7 +728,7 @@ describe('tool definitions', () => {
     const { client } = await connect()
     const { tools } = await client.listTools()
     expect(tools.map((tool) => tool.name).sort()).toEqual(MCP_TOOLS.map((tool) => tool.name).sort())
-    expect(tools).toHaveLength(64)
+    expect(tools).toHaveLength(65)
   })
 
   it('gives every tool a description, a title and complete annotations', async () => {

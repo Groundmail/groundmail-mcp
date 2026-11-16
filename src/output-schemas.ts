@@ -351,6 +351,19 @@ export const validateEmailOutput: ObjectSchema = object(
   ['email', 'verdict', 'reasons', 'suggestion', 'disposable', 'role'],
 )
 
+export const verifyEmailOutput: ObjectSchema = object(
+  {
+    ...validateEmailOutput.properties,
+    mailbox: {
+      type: 'string',
+      enum: ['exists', 'not_found', 'catch_all', 'disposable', 'unknown'],
+      description: 'Whether the mailbox exists. catch_all: the domain accepts every address, so it cannot be confirmed',
+    },
+    billed: boolean('This answer is charged ($0.01). Catch-all, unknown and already-known answers are not'),
+  },
+  ['email', 'verdict', 'reasons', 'suggestion', 'disposable', 'role', 'mailbox', 'billed'],
+)
+
 export const getEmailOutput: ObjectSchema = object({ email: described(emailItem, 'The email') }, ['email'])
 
 export const batchOutput: ObjectSchema = object(

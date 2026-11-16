@@ -61,6 +61,7 @@ import {
   testInboxOutput,
   testWebhookOutput,
   validateEmailOutput,
+  verifyEmailOutput,
   burrowGuardChecksOutput,
   burrowGuardSiteCreatedOutput,
   burrowGuardSiteOutput,
@@ -422,6 +423,12 @@ export async function callMcpTool(
         const email = optString(args, 'email')
         if (!email) return textResult('Missing required argument: email', true)
         return textResult(await client.validate(email))
+      }
+      case 'verify_email': {
+        const email = optString(args, 'email')
+        if (!email) return textResult('Missing required argument: email', true)
+        const tenant = optString(args, 'tenant')
+        return textResult(await client.validate(email, { mailboxCheck: true, ...(tenant ? { tenant } : {}) }))
       }
       case 'add_suppression': {
         const email = optString(args, 'email')
@@ -1482,6 +1489,27 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
     outputSchema: validateEmailOutput,
     annotations: { ...readOnly('Validate email address'), openWorldHint: true },
+  },
+  {
+    name: 'verify_email',
+    description:
+      'Confirm that one email address has a mailbox that exists. Returns mailbox: exists | not_found | catch_all | disposable | unknown and billed, plus the free validation result (verdict, reasons, typo suggestion, disposable and role flags). Costs $0.01 when billed is true; catch_all, unknown and answers Groundmail already knows are free. Needs a paid Groundmail plan. Sends nothing to the address.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        email: { type: 'string', description: 'Email address to check' },
+        tenant: tenantProp('Count the check toward this tenant'),
+      },
+      required: ['email'],
+    },
+    outputSchema: verifyEmailOutput,
+    annotations: {
+      title: 'Verify email address',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
   },
   {
     name: 'add_suppression',
