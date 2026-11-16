@@ -8,13 +8,13 @@
     "url": "https://github.com/Groundmail/groundmail-mcp",
     "source": "github"
   },
-  "version": "0.30.3",
+  "version": "0.30.4",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "groundmail-mcp",
-      "version": "0.30.3",
+      "version": "0.30.4",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"
