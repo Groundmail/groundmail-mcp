@@ -126,6 +126,9 @@ export const emailItem: Schema = object(
     batch_id: nullableString('The batch send it came from (batch_…), for get_batch and cancel_batch; null for a single send'),
     tenant: nullableString('External id of the tenant the email was sent as. Present only when it was sent as a tenant'),
     stream: string('Mail stream it went out on: transactional, product or newsletter (each sends from its own IPs)'),
+    detected_category: nullableString(
+      'What Groundmail decided the email is: transactional or product. Null while it is being checked, when its template was not settled yet, and for mail Groundmail does not check (newsletter, tests)',
+    ),
   },
   ['id', 'from', 'to', 'subject', 'status'],
 )
@@ -285,7 +288,7 @@ export const templateItem: Schema = object(
       description: 'Variable names the template uses',
     },
     unsubscribe_enabled: boolean('Whether managed unsubscribe is on for sends using this template'),
-    category: string('transactional or product'),
+    category: string('Deprecated and ignored: Groundmail decides the category from the published content'),
     folder: nullableString('Folder the template is filed in, or null'),
     sender_id: nullableString('Sender the template goes out as when a send sets neither from nor sender; null uses the default sender'),
     published_version_id: nullableString('Id of the version sends currently use'),

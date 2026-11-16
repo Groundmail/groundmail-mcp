@@ -1081,7 +1081,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
           type: 'string',
           enum: ['transactional', 'product', 'newsletter'],
           description:
-            'transactional (default): sign-in codes, receipts, alerts. product: onboarding, lifecycle and notification email, with one-click unsubscribe. newsletter: opt-in newsletters, for approved accounts only (otherwise the send fails with newsletter_not_enabled), sent from separate IPs with one-click unsubscribe',
+            'Usually omit it: Groundmail decides whether each email is transactional or product, and ignores those two values here (see detected_category on the email). Set newsletter only for opt-in newsletters on an account approved for them (otherwise the send fails with newsletter_not_enabled); they go from separate IPs with one-click unsubscribe',
         },
         tenant: tenantProp(
           'Send as this tenant: the send uses its domains, suppression list, pause switch and daily limit. Omit to send from the account as a whole',
