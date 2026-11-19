@@ -124,7 +124,10 @@ export const emailItem: Schema = object(
     opened_at: nullableString('First open (ISO 8601); needs open tracking on the sending domain'),
     clicked_at: nullableString('First tracked-link click (ISO 8601); needs click tracking on the sending domain'),
     batch_id: nullableString('The batch send it came from (batch_…), for get_batch and cancel_batch; null for a single send'),
-    tenant: nullableString('External id of the tenant the email was sent as. Present only when it was sent as a tenant'),
+    tenant: nullableString(
+      'External id of the tenant the email was sent as. Present only when it was sent as a tenant; null once that tenant is deleted',
+    ),
+    tenant_deleted: boolean('True when the email was sent as a tenant that has since been deleted. Absent otherwise'),
     stream: string('Mail stream it went out on: transactional, product or newsletter (each sends from its own IPs)'),
     detected_category: nullableString(
       'What Groundmail decided the email is: transactional or product. Null while it is being checked, when its template was not settled yet, and for mail Groundmail does not check (newsletter, tests)',
