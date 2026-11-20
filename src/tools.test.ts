@@ -121,6 +121,19 @@ describe('callMcpTool', () => {
     expect(result.content[0]?.text).toContain('msg_1')
   })
 
+  it('send_email passes markdown to the SDK', async () => {
+    const client = mockClient()
+    await callMcpTool(client as never, 'send_email', {
+      from: 'reports@example.com',
+      to: 'owner@example.com',
+      subject: 'Weekly metrics',
+      markdown: '| Metric | Value |\n|---|---:|\n| Signups | 50 |',
+    })
+    expect(client.emails.send).toHaveBeenCalledWith(
+      expect.objectContaining({ markdown: '| Metric | Value |\n|---|---:|\n| Signups | 50 |', html: undefined }),
+    )
+  })
+
   it('send_email forwards category newsletter and list_emails the stream filter', async () => {
     const client = mockClient()
     await callMcpTool(client as never, 'send_email', {

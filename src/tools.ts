@@ -226,6 +226,7 @@ export async function callMcpTool(
           to,
           ...(subject ? { subject } : {}),
           html: optString(args, 'html'),
+          ...(optString(args, 'markdown') ? { markdown: optString(args, 'markdown') } : {}),
           text: optString(args, 'text'),
           reply_to: optString(args, 'reply_to'),
           ...(category ? { category: category as 'product' | 'newsletter' } : {}),
@@ -850,7 +851,8 @@ export async function callMcpTool(
         if (!mailbox || !subject || !to?.length) return textResult('Missing required arguments: mailbox, to and subject', true)
         const text = optString(args, 'text')
         const html = optString(args, 'html')
-        if (!text && !html) return textResult('Provide text or html', true)
+        const markdown = optString(args, 'markdown')
+        if (!text && !html && !markdown) return textResult('Provide text, html or markdown', true)
         const cc = addressArg(args, 'cc')
         return textResult(
           await client.mailboxes.messages.send(mailbox, {
@@ -859,6 +861,7 @@ export async function callMcpTool(
             subject,
             ...(text ? { text } : {}),
             ...(html ? { html } : {}),
+            ...(markdown ? { markdown } : {}),
             ...(optString(args, 'idempotency_key') ? { idempotencyKey: optString(args, 'idempotency_key') } : {}),
           }),
         )
@@ -869,11 +872,13 @@ export async function callMcpTool(
         if (!mailbox || !messageId) return textResult('Missing required arguments: mailbox and message_id', true)
         const text = optString(args, 'text')
         const html = optString(args, 'html')
-        if (!text && !html) return textResult('Provide text or html', true)
+        const markdown = optString(args, 'markdown')
+        if (!text && !html && !markdown) return textResult('Provide text, html or markdown', true)
         return textResult(
           await client.mailboxes.messages.reply(mailbox, messageId, {
             ...(text ? { text } : {}),
             ...(html ? { html } : {}),
+            ...(markdown ? { markdown } : {}),
             ...(optBoolean(args, 'reply_all') ? { reply_all: true } : {}),
             ...(optString(args, 'idempotency_key') ? { idempotencyKey: optString(args, 'idempotency_key') } : {}),
           }),
@@ -1048,7 +1053,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   {
     name: 'send_email',
     description:
-      'Send a transactional email via Groundmail. Provide subject + html/text, or a published template_id / template_alias with optional variables. To test without delivering anything, send to a simulator address: delivered@, bounce@, block@, complaint@, suppressed@ or delayed@simulator.groundmail.dev (plus addressing like bounce+test1@ works); the result has test: true and webhooks fire as for real mail.',
+      'Send a transactional email via Groundmail. Provide subject + html, markdown or text (markdown renders tables and formatting for you), or a published template_id / template_alias with optional variables. To test without delivering anything, send to a simulator address: delivered@, bounce@, block@, complaint@, suppressed@ or delayed@simulator.groundmail.dev (plus addressing like bounce+test1@ works); the result has test: true and webhooks fire as for real mail.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1067,8 +1072,13 @@ export const MCP_TOOLS: McpToolDefinition[] = [
           description: 'Recipient email address. A …@simulator.groundmail.dev address simulates an outcome and never delivers',
         },
         subject: { type: 'string', description: 'Subject line. Optional when using a published template' },
-        html: { type: 'string', description: 'HTML body. Not used with template_id or template_alias' },
-        text: { type: 'string', description: 'Plain-text body. Not used with template_id or template_alias' },
+        html: { type: 'string', description: 'HTML body, sent as written. Not with markdown, template_id or template_alias' },
+        markdown: {
+          type: 'string',
+          description:
+            'GitHub-flavoured Markdown, tables included, rendered to the HTML body with bordered tables. The easy way to send a report or table. Not with html, template_id or template_alias',
+        },
+        text: { type: 'string', description: 'Plain-text body. Left out with html or markdown, one is built from the HTML (table rows as lines, cells separated by " | ", link URLs kept). Not used with template_id or template_alias' },
         reply_to: { type: 'string', description: 'Address that replies should go to' },
         template_id: { type: 'string', description: 'Published template UUID' },
         template_alias: { type: 'string', description: 'Published template alias' },
@@ -2225,8 +2235,12 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         to: { type: ['string', 'array'], items: { type: 'string' }, description: 'Recipient address, or a list of them' },
         cc: { type: ['string', 'array'], items: { type: 'string' }, description: 'Cc address, or a list of them' },
         subject: { type: 'string', description: 'Subject line' },
-        text: { type: 'string', description: 'Plain-text body. Provide text, html or both' },
-        html: { type: 'string', description: 'HTML body' },
+        text: { type: 'string', description: 'Plain-text body. Provide text, html or markdown; left out, one is built from the html or markdown' },
+        html: { type: 'string', description: 'HTML body, sent as written. Not with markdown' },
+        markdown: {
+          type: 'string',
+          description: 'GitHub-flavoured Markdown, tables included, rendered to the HTML body with bordered tables. Not with html',
+        },
         idempotency_key: idempotencyProp,
       },
       required: ['mailbox', 'to', 'subject'],
@@ -2248,8 +2262,12 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       properties: {
         mailbox: mailboxProp,
         message_id: { type: 'string', description: 'The received message to answer (mbm_…)' },
-        text: { type: 'string', description: 'Plain-text body. Provide text, html or both' },
-        html: { type: 'string', description: 'HTML body' },
+        text: { type: 'string', description: 'Plain-text body. Provide text, html or markdown; left out, one is built from the html or markdown' },
+        html: { type: 'string', description: 'HTML body, sent as written. Not with markdown' },
+        markdown: {
+          type: 'string',
+          description: 'GitHub-flavoured Markdown, tables included, rendered to the HTML body with bordered tables. Not with html',
+        },
         reply_all: { type: 'boolean', description: 'Also copy everyone else on the message. Each of them counts toward the new-recipient limits' },
         idempotency_key: idempotencyProp,
       },

@@ -386,6 +386,18 @@ describe('mailbox tools', () => {
     expect(outsideBlocks(result.structuredContent)).not.toContain('SECRET-')
   })
 
+  it('send_mailbox_message and reply_to_mailbox_message pass markdown', async () => {
+    const client = mockClient()
+    await callMcpTool(client as never, 'send_mailbox_message', { mailbox: 'mbx_1', to: 'ada@example.com', subject: 'Report', markdown: '| A |\n|---|\n| 1 |' })
+    expect(client.mailboxes.messages.send).toHaveBeenLastCalledWith('mbx_1', {
+      to: ['ada@example.com'],
+      subject: 'Report',
+      markdown: '| A |\n|---|\n| 1 |',
+    })
+    await callMcpTool(client as never, 'reply_to_mailbox_message', { mailbox: 'mbx_1', message_id: 'mbm_1', markdown: '**Thanks**' })
+    expect(client.mailboxes.messages.reply).toHaveBeenLastCalledWith('mbx_1', 'mbm_1', { markdown: '**Thanks**' })
+  })
+
   it('send_mailbox_message takes one address or a list, and passes the key', async () => {
     const client = mockClient()
     const result = await callMcpTool(client as never, 'send_mailbox_message', {
